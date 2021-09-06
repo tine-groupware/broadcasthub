@@ -1,0 +1,234 @@
+# Tine 2.0 Broadcasthub #
+[[_TOC_]]
+
+## What is this for? ##
+The Tine 2.0 Broadcasthub delivers status messages about files and containers from the Tine 2.0 Server to the Tine 2.0 Client in the browser. One use case would be to mark files in the Tine 2.0 file manager that are currently opened in the Tine 2.0 OnlyOffice integration.
+
+The Tine 2.0 Server publishes messages to a Redis channel. The Tine 2.0 Broadcasthub listens to this channel. Furthermore the Tine 2.0 Broadcasthub is a websocket server. Tine 2.0 clients in the browsers can connect to the Tine 2.0 Broadcasthub as websocket clients. When the Tine 2.0 Broadcasthub receives a message from the Redis channel, then it will send this message to all connected websocket clients.
+
+In order to connect to the Tine 2.0 Broadcasthub websocket server, the Tine 2.0 Cient in the browser has to send a valid Tine 2.0 auth token for the Tine 2.0 broadcasthub channel in the HTTP Authorization header as bearer token in the first request to the Tine 2.0 Broadcasthub websocket server. The Tine 2.0 Broadcasthub verifies the token with a request to the Tine 2.0 server JSON API method `Tinebase.checkAuthToken` during the HTTP handshake for the websocket connection. If the token is valid, the Tine 2.0 Broadcasthub establishes the connection to the websocket client. Otherwise the Tine 2.0 Broadcasthub refuses the websocket connection and sends HTTP 401 as response. This way only authorized Tine 2.0 clients are able to receive the Tine 2.0 Server broadcast messages.
+
+The messages the Tine 2.0 Server publishes could be in a JSON format for example, eventually with fields for record ID, container ID, model name, HTTP verb (create, update, delete) that was used at last on the resource. For the Tine 2.0 Broadcasthub it does not matter, what string is published to the Redis channel, it just sends all string messages received from the Redis channel to the Tine 2.0 clients.
+
+
+## Prerequisites to run the Tine 2.0 Broadcasthub ##
+* Developped and tested on Kubuntu 20.04
+* Tine 2.0 Server with Tine 2.0 JSON API
+* Redis Server
+* node with npm, developed and tested against lts/fermium: node v14.17.5 (npm v7.20.6)
+
+
+## Installation of the Tine 2.0 Broadcasthub ##
+The necessary npm packages are defined in the package.json and pinned to an exact version in the package-lock.json.
+
+Production:
+
+    git clone <tine20_broadcasthub_repo>
+    cd <tine20_broadcasthub_repo>
+    npm install --production
+    # Or when NODE_ENV=production
+    npm install
+
+Development and CI:
+
+    git clone <tine20_broadcasthub_repo>
+    cd <tine20_broadcasthub_repo>
+    npm install --production=false
+    # Or when NODE_ENV not set or NODE_ENV != production
+    npm install
+
+
+## Configuration of the Tine 2.0 Broadcasthub ##
+The Tine 2.0 Broadcasthub uses `dotenv` (https://www.npmjs.com/package/dotenv) for configuration. See file `.env-dist` for available variables. The file can be copied to `.env` and the variable values can be adapted as needed.
+
+`REDIS_URL`: URL to the Redis server the Tine 2.0 Broadcast will connect to
+
+`REDIS_CHANNEL`: The Redis channel the Tine 2.0 Broadcasthub will subscribe to
+
+`WS_PORT`: The port the Tine 2.0 Broadcasthub will expose the websocket server to
+
+`TINE20_JSON_API_URL`: The URL (including protocol, domain, path and query string etc.) of the Tine 2.0 JSON API
+
+`TINE20_BROADCAST_CHANNEL`: The name of the channel the Tine 2.0 auth token should be valid for, that is sent by the clients in the first request to the Tine 2.0 Broadcasthub websocket server.
+
+`DEBUG_DEFAULT_LOGGING`: Value "on" enables logging of all loggers in the `debug` namespaces `Tine20Broadcasthub:Info:*` and `Tine20Broadcasthub:Error:*`. All other values or removing this key deactivate the default logging.
+
+`DEBUG_LOG_TO_FILE`: Value "on" enables logging into a file instead of `stderr`. This only takes effect if the environment variables `DEBUG` and `DEBUG_LOG_FILE` are set.
+
+`DEBUG_LOG_FILE`: Absolute path or path relative to `src/Logger.js` of the log file the Tine 2.0 Broadcasthub should log to. The file is created if it does not exist. The logger appends the logs to an existing file.
+
+`TEST_INTEGRATION_WS_URL`: URL to the websocket server (including protocol, domain, path, port etc.) for the integration tests.
+
+`TEST_E2E_WS_URL`: URL to the websocket server (including protocol, domain, path etc.) for the end to end tests.
+
+
+## Start and stop the Tine 2.0 Broadcasthub ##
+Start:
+
+    node app.js
+
+Stop:
+
+    Kill the node process, with strg+c for example; stop the container etc.
+
+
+## Tests ##
+Jest (https://jestjs.io/) is used as test framework.
+
+
+### Integration tests ###
+Run `npm run-script integrationtest` to execute the integration tests. These tests work standalone with a Redis mock and a Tine 2.0 JSON API mock. The Tine 2.0 Broadcasthub is started at the beginning of the tests and shutdown at the end of the tests. The tests setup a Redis publisher to simulate the Tine 2.0 Server sending a message to the Redis channel. The tests also setup websocket clients that connect to the Tine 2.0 Broadcasthub websocket server. The tests verify that the websocket clients receive the data they should receive.
+
+
+### End to end tests ###
+Run `npm run-script e2etest` to execute the end to end tests. These tests require an external Redis, an external Tine 2.0 JSON API and an external already running Tine 2.0 Broadcasthub. Like the integration tests the end to end tests setup a Redis publisher and websocket clients and verify that the websocket clients receive the data they should receive.
+
+
+## Logging and debug output ##
+The package `debug` (https://www.npmjs.com/package/debug) is used for logging. For the namespaces for the logging in the application see file `src/Logger.js`:
+
+    Tine20Broadcasthub
+      Info:*
+      Error:*
+      App (currently not used)
+      Broadcasthub
+      Tine20AuthTokenChecker
+
+For the namespaces for the logging in the tests see file `tests/Util/Logger.js`:
+
+    Test
+      Error:*
+      Debug
+
+Loggers in namespaces ending with `*` are logging always as soon as the `DEBUG` environment variable is set to any value. They are supposed to log always no matter if `DEBUG` is set or not, but they do not.
+
+For available logging configuration see section "Configuration of the Tine 2.0 Broadcasthub".
+
+
+### Logging in the application ###
+There are three levels of logging:
+
+* Info
+* Error
+* Debug
+
+
+#### Configure what is logged ####
+* Without `DEBUG_DEFAULT_LOGGING` and `DEBUG` being set on invocation: Only errors are logged
+* With `DEBUG_DEFAULT_LOGGING` set to "on" and without `DEBUG` being set on invocation: Infos and errors are logged
+* With `DEBUG` being set: All loggers in namespace with suffix `*` and all loggers in the specified namespaces logg. With `DEBUG=Tine20Broadcasthub:* node app.js` for example all loggers log (info, error and debug)
+
+
+#### Configure where it is logged to ####
+* When `DEBUG_LOG_TO_FILE` is not set or set to another value than "on" or when `DEBUG_LOG_FILE` is not set: Logs go to `stderr`
+* With `DEBUG_LOG_TO_FILE` set to "on" and `DEBUG_LOG_FILE` set to an absolute path in the filesystem: Logs are appended to that file, file gets created when it does not exist
+* With `DEBUG_LOG_TO_FILE` set to "on" and `DEBUG_LOG_FILE` set to an path relative to `src/Logger.js`: Logs are appended to that file, file gets created when it does not exist
+
+***Attention!*** The Tine 2.0 Broadcasthub exits with status 1 when logging to file is configured and the file can not be created or is not writeable.
+
+***Attention!*** When logs go to file make sure to not unlink that file. Otherwise the logger will continue to log to the file (by inode number, open file handler) and the file will be deleted by the system once the application is stopped/restarted and the logging process keeping the file open does not exist anymore. There is no way to recover the log file once the last link to the inode is gone. If `logrotate` is used make sure to use option `truncatecopy` to keep the original file and to just rotate the content of the file. This is valid for Linux/Unix systems only. Other systems have not been tested.
+
+
+### Logging in the tests ###
+There are two levels of logging:
+
+* Error
+* Debug
+
+
+#### Configure what is logged in the integration tests ####
+The Tine 2.0 Broadcasthub is started from within the tests. The logs can be configured as described above. The `debug` output is logged in addition to the standard Jest output.
+
+* Without `DEBUG` being set on test invocation:
+
+    * Tests: Error
+    * Application: Depends on `DEBUG_DEFAULT_LOGGING`
+
+        * `DEBUG_DEFAULT_LOGGING` not set or set to another value than "on": Error
+        * `DEBUG_DEFAULT_LOGGING` set to "on": Info, error
+
+* All test invocations with `DEBUG` being set activate the loggers in the namespaces with `*` suffix as well as the the loggers in the specified namespaces, for example:
+
+    * With `DEBUG=Test:*`:
+
+        * Tests: Error, debug
+        * Application: Info, error
+
+    * With `DEBUG=Tine20Broadcasthub:*,Test:*`:
+
+        * Tests: Error, debug
+        * Application: Info, error, debug
+
+
+#### Configure where it is logged to in the integration tests ####
+The tests log to `stderr` only. Logging to file is deactivated in the tests.
+
+
+#### Configure logging in the end to end tests ####
+The Tine 2.0 Broadcasthub is run external from the tests. See "Logging in the application" for configuration of the logs of the Tine 2.0 Broadcasthub.
+
+By default the end to end tests do not log anything. Logs can be enabled by setting `DEBUG` at test invocation, for example `DEBUG=Test:*` for error and debug output or `DEBUG=Test:Error:*` for error output only. The end to end tests only log to stderr. Logging to file is deactivated in the tests.
+
+
+## Development ##
+For basic development the standalone integration tests (use mocks for external services) might be sufficient: Change the code, adapt tests if necessary, run integration tests and check if everything is fine.
+
+For full local development and running the end to end tests locally a local Tine 2.0 development instance is necessary. Furthermore a local Redis server is necessary. Adapt the code as necessary and check if it works with the following steps:
+
+* Stop the local Tine 2.0 Broadcasthub if it is already running (code changes only take effect after node restart)
+* Start the Tine 2.0 Broadcasthub locally, optional with enabled debug output to check what is going on: `DEBUG=Tine20Broadcasthub:* node app.js`
+* Start the local test client that simulates the Tine 2.0 Client in the browser: `node dev/client.js`
+* In order to simulate the Tine 2.0 Server publishing into the Redis channel the Tine 2.0 Broadcasthub listens to, run the trigger file: `node dev/trigger.js`.
+* Each time the trigger is run, the Tine 2.0 Broadcasthub receives a message from the Redis channel it is listening to and broadcasts the message to the connected test client. Check the logs of the running Tine 2.0 Broadcasthub as well as of the test client and trigger.
+
+
+### Setup local Tine 2.0 development instance ###
+In general see README in `tine20-docker` repository. Webpack built etc. for the frontend can be omitted, since we only need the Tine 2.0 Server JSON API.
+
+
+#### Setup auth token channel for development ####
+This has been tested with `tine20-docker` repository, commit `f21cab925f46709efbdf301992967377b533e662`.
+
+Prior to any execution or build in the local `tine20-docker` project, add/modify the following files:
+
+`pullup.json`:
+
+    {
+      "composeFiles":[
+        "pma",
+         "mailstack",
+         "customCfg",
+         "rw"
+      ]
+    }
+
+
+`configs/customConfig/config.inc.php`
+
+    <?php
+
+    return [
+     'authTokenChanels' => ['records' =>
+        [ 'name' => 'broadcasthub' ],
+      ],
+    ];
+
+
+`configs/conf.d/custom.inc.php`
+
+    # Add to array that is returned
+
+    'authTokenChanels' => ['records' =>
+       [ 'name' => 'broadcasthub' ],
+     ],
+
+
+When the local Tine 2.0 Server is up, open phpMyAdmin (see `tine20-docker` README) and add this record:
+
+    INSERT INTO tine20_auth_token (id, auth_token, account_id, valid_until, channels) VALUES ('longlongid', 'longlongtoken', (select id from tine20_accounts where login_name = "tine20admin"), ADDDATE(NOW(), INTERVAL 1 YEAR), '["broadcasthub"]');
+
+
+### Start local Redis server ###
+
+    cd dev/redis-docker
+    docker-compose up -d

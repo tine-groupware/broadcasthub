@@ -1,0 +1,36 @@
+{
+  "name": "tine20-broadcasthub",
+  "version": "1.0.0",
+  "description": "Broadcasthub for Tine 2.0 file node and container status",
+  "main": "app.js",
+  "scripts": {
+    "e2etest": "TZ=UTC jest './test/e2etest/*test.js'",
+    "integrationtest": "TZ=UTC jest --config=./test/integrationtest/jest.config.js './test/integrationtest/*test.js'"
+  },
+  "keywords": [
+    "Tine 2.0",
+    "broadcast",
+    "broadcasthub",
+    "websocket",
+    "redis",
+    "server"
+  ],
+  "author": "Daniel Hoffmann",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "debug": "^4.3.2",
+    "dotenv": "^10.0.0",
+    "node-fetch": "^2.6.1",
+    "redis": "^3.1.2",
+    "ws": "^8.2.0"
+  },
+  "optionalDependencies": {
+    "bufferutil": "^4.0.3",
+    "utf-8-validate": "^5.0.5"
+  },
+  "devDependencies": {
+    "fetch-mock-jest": "^1.5.1",
+    "jest": "^27.0.6",
+    "redis-mock": "^0.56.3"
+  }
+}
