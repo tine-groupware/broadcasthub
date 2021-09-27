@@ -4,6 +4,7 @@
   "description": "Broadcasthub for Tine 2.0 file node and container status",
   "main": "app.js",
   "scripts": {
+    "start": "node app.js",
     "e2etest": "TZ=UTC jest './test/e2etest/*test.js'",
     "integrationtest": "TZ=UTC jest --config=./test/integrationtest/jest.config.js './test/integrationtest/*test.js'"
   },
@@ -31,6 +32,7 @@
   "devDependencies": {
     "fetch-mock-jest": "^1.5.1",
     "jest": "^27.0.6",
+    "nodemon": "^2.0.13",
     "redis-mock": "^0.56.3"
   }
 }

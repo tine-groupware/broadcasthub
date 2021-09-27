@@ -12,10 +12,14 @@ The messages the Tine 2.0 Server publishes could be in a JSON format for example
 
 
 ## Prerequisites to run the Tine 2.0 Broadcasthub ##
-* Developped and tested on Kubuntu 20.04
+Initial development and test setup:
+
+* Developed and tested on Kubuntu 20.04
 * Tine 2.0 Server with Tine 2.0 JSON API
 * Redis Server
 * node with npm, developed and tested against lts/fermium: node v14.17.5 (npm v7.20.6)
+
+Manually tested within the Tine 2.0 docker setup.
 
 
 ## Installation of the Tine 2.0 Broadcasthub ##
@@ -26,16 +30,15 @@ Production:
     git clone <tine20_broadcasthub_repo>
     cd <tine20_broadcasthub_repo>
     npm install --production
-    # Or when NODE_ENV=production
-    npm install
+    # Make sure to set NODE_ENV=production (!)
 
 Development and CI:
 
     git clone <tine20_broadcasthub_repo>
     cd <tine20_broadcasthub_repo>
-    npm install --production=false
-    # Or when NODE_ENV not set or NODE_ENV != production
     npm install
+    # Make sure NODE_ENV is not set or is not "production"
+    # development dependencies have to get installed
 
 
 ## Configuration of the Tine 2.0 Broadcasthub ##
@@ -72,6 +75,23 @@ Stop:
     Kill the node process, with strg+c for example; stop the container etc.
 
 
+## Build and push production container image ##
+* Make sure to tag the commit you want run the build for and to checkout that tag
+* Make sure your local repository is clean
+* Execute the integration and e2e tests locally and make sure everything is fine
+* Push the tag into the remote repository
+* Then run:
+
+        sh build/docker-build-prod.sh
+        sh build/docker-push-prod.sh
+
+This will build the docker image based on the current source code status (gets copied into the image) and push the image into the Metaways Gitlab registry. The image will be tagged with the current GIT tag.
+
+The Tine 2.0 docker setup depends on this container image.
+
+The build scripts work fine when the GIT client uses a SSH key for authentication. The build scripts have not been tested with interactive username / password prompt.
+
+
 ## Tests ##
 Jest (https://jestjs.io/) is used as test framework.
 
@@ -82,6 +102,12 @@ Run `npm run-script integrationtest` to execute the integration tests. These tes
 
 ### End to end tests ###
 Run `npm run-script e2etest` to execute the end to end tests. These tests require an external Redis, an external Tine 2.0 JSON API and an external already running Tine 2.0 Broadcasthub. Like the integration tests the end to end tests setup a Redis publisher and websocket clients and verify that the websocket clients receive the data they should receive.
+
+
+### Tests in Gitlab CI ###
+See `.gitlab-ci.yml` for configuration and https://about.gitlab.com/blog/2016/03/01/gitlab-runner-with-docker/ for background information.
+
+In the Gitlab CI for this project only the integration tests are executed. Running the end to end tests in the Gitlab CI seems not to be worth the trouble. Rather real end to end tests from change in Tine 2.0 file manager to Tine 2.0 client in a browser should be implemented. But that is out of scope of this repository, should be implemented in the Tine 2.0 repository resp. in the Tine 2.0 docker setup.
 
 
 ## Logging and debug output ##
@@ -171,9 +197,14 @@ By default the end to end tests do not log anything. Logs can be enabled by sett
 
 
 ## Development ##
+### Development within the Tine 2.0 docker setup ###
+See README of `tine20/docker`, section "Add Tine 2.0 Broadcasthub/Development".
+
+
+### Development with local node application ###
 For basic development the standalone integration tests (use mocks for external services) might be sufficient: Change the code, adapt tests if necessary, run integration tests and check if everything is fine.
 
-For full local development and running the end to end tests locally a local Tine 2.0 development instance is necessary. Furthermore a local Redis server is necessary. Adapt the code as necessary and check if it works with the following steps:
+For full local development and running the end to end tests locally a local Tine 2.0 development instance is necessary (Tine 2.0 JSON API for checking the token). Furthermore a local Redis server is necessary. Adapt the code as necessary and check if it works with the following steps:
 
 * Stop the local Tine 2.0 Broadcasthub if it is already running (code changes only take effect after node restart)
 * Start the Tine 2.0 Broadcasthub locally, optional with enabled debug output to check what is going on: `DEBUG=Tine20Broadcasthub:* node app.js`
@@ -183,36 +214,13 @@ For full local development and running the end to end tests locally a local Tine
 
 
 ### Setup local Tine 2.0 development instance ###
-In general see README in `tine20-docker` repository. Webpack built etc. for the frontend can be omitted, since we only need the Tine 2.0 Server JSON API.
+In general see README in `tine20-docker` repository. Webpack build etc. for the frontend can be omitted, since we only need the Tine 2.0 Server JSON API.
 
 
 #### Setup auth token channel for development ####
 This has been tested with `tine20-docker` repository, commit `f21cab925f46709efbdf301992967377b533e662`.
 
-Prior to any execution or build in the local `tine20-docker` project, add/modify the following files:
-
-`pullup.json`:
-
-    {
-      "composeFiles":[
-        "pma",
-         "mailstack",
-         "customCfg",
-         "rw"
-      ]
-    }
-
-
-`configs/customConfig/config.inc.php`
-
-    <?php
-
-    return [
-     'authTokenChanels' => ['records' =>
-        [ 'name' => 'broadcasthub' ],
-      ],
-    ];
-
+Prior to any execution or build in the local `tine20-docker` project modify the following file:
 
 `configs/conf.d/custom.inc.php`
 
@@ -226,6 +234,9 @@ Prior to any execution or build in the local `tine20-docker` project, add/modify
 When the local Tine 2.0 Server is up, open phpMyAdmin (see `tine20-docker` README) and add this record:
 
     INSERT INTO tine20_auth_token (id, auth_token, account_id, valid_until, channels) VALUES ('longlongid', 'longlongtoken', (select id from tine20_accounts where login_name = "tine20admin"), ADDDATE(NOW(), INTERVAL 1 YEAR), '["broadcasthub"]');
+
+
+For later commits of `tine20-docker` which already include the Tine 2.0 Broadcasthub copy the `.pullup.json` to `pullup.json` and remove entry `broadcasthub` from the key `composeFiles`. This way the startup of the Tine 2.0 Broadcasthub should be prevented within the Tine 2.0 docker setup.
 
 
 ### Start local Redis server ###
