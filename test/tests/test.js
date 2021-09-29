@@ -6,7 +6,7 @@ const logD = Logger.Debug;
 
 const tine20AuthToken = require(`${__base}test/Util/Tine20AuthToken`);
 const publisher = require(`${__base}test/Util/RedisPublisher.js`);
-
+const websocketMessageTimeout = 500;
 
 const testMain = function testMain() {
 
@@ -50,7 +50,7 @@ const testMain = function testMain() {
       setTimeout(() => {
         expect(receivedWsMessage).toBe(expectedWsMessage);
         resolve();
-      }, 500);
+      }, websocketMessageTimeout);
     });
   });
 
@@ -108,7 +108,7 @@ const testMain = function testMain() {
       setTimeout(() => {
         expect(receivedWsMessage).toBe(expectedWsMessage);
         resolve();
-      }, 500);
+      }, websocketMessageTimeout);
     });
   });
 
@@ -166,7 +166,7 @@ const testMain = function testMain() {
         expect(receivedWsMessage1).toBe(expectedWsMessage);
         expect(receivedWsMessage2).toBe(expectedWsMessage);
         resolve();
-      }, 500);
+      }, websocketMessageTimeout);
     });
 
   });
@@ -203,7 +203,7 @@ const testMain = function testMain() {
         expect(wsClientOpenedConnection).toBe(expectedWsClientOpenedConnection);
         expect(receivedHttpStatus).toBe(expectedHttpStatus);
         resolve();
-      }, 500);
+      }, websocketMessageTimeout);
     });
 
   });
@@ -236,7 +236,7 @@ const testMain = function testMain() {
         expect(wsClientOpenedConnection).toBe(expectedWsClientOpenedConnection);
         expect(receivedHttpStatus).toBe(expectedHttpStatus);
         resolve();
-      }, 500);
+      }, websocketMessageTimeout);
     });
 
   });
@@ -279,7 +279,7 @@ const testMain = function testMain() {
         expect(receivedWsMessage).toBe(expectedWsMessage);
         ws1.close(); // Close websocket client here because onmessage event will never be called
         resolve();
-      }, 500);
+      }, websocketMessageTimeout);
     });
 
   });

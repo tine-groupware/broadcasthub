@@ -103,6 +103,8 @@ Run `npm run-script integrationtest` to execute the integration tests. These tes
 ### End to end tests ###
 Run `npm run-script e2etest` to execute the end to end tests. These tests require an external Redis, an external Tine 2.0 JSON API and an external already running Tine 2.0 Broadcasthub. Like the integration tests the end to end tests setup a Redis publisher and websocket clients and verify that the websocket clients receive the data they should receive.
 
+Often arbitary tests fail because the timeout for waiting for the websocket message is reached. Try to minimize system load by other processes as far as possible, deactivate running virus scanner for example. Alternatively the timeout can be temporarily increased by setting constant `websocketMessageTimeout` in `test/tests/test.js` to a higher value.
+
 
 ### Tests in Gitlab CI ###
 See `.gitlab-ci.yml` for configuration and https://about.gitlab.com/blog/2016/03/01/gitlab-runner-with-docker/ for background information.
@@ -211,6 +213,13 @@ For full local development and running the end to end tests locally a local Tine
 * Start the local test client that simulates the Tine 2.0 Client in the browser: `node dev/client.js`
 * In order to simulate the Tine 2.0 Server publishing into the Redis channel the Tine 2.0 Broadcasthub listens to, run the trigger file: `node dev/trigger.js`.
 * Each time the trigger is run, the Tine 2.0 Broadcasthub receives a message from the Redis channel it is listening to and broadcasts the message to the connected test client. Check the logs of the running Tine 2.0 Broadcasthub as well as of the test client and trigger.
+
+
+The Tine 2.0 Broadcasthub can also be started by using `nodemon` which watches for file changes and reloads the node application automatically. `nodemon` can be used like `node`:
+
+    node_modules/.bin/nodemon app.js
+
+Type `rs` in the `nodemon` output to force a reload. Or just change/save or `touch` a file.
 
 
 ### Setup local Tine 2.0 development instance ###
