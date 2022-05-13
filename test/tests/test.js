@@ -6,29 +6,23 @@ const logD = Logger.Debug;
 
 const tine20AuthToken = require(`${__base}test/Util/Tine20AuthToken`);
 const publisher = require(`${__base}test/Util/RedisPublisher.js`);
-const websocketMessageTimeout = 500;
 
-const testMain = function testMain() {
+// See timeouts in e2etest/test.js resp. integrationtest/test.js
 
-  test('A websocket client receives a string message through websocket from the Tine 2.0 Broadcasthub which is the same string message that has been published to the Redis broadcasthub channel when a string message is published to the Redis broadcasthub channel, the websocket client has sent a valid Tine 2.0 authorization token as bearer token in the HTTP Authorization header in the initial websocket connection request and the websocket client has successfully connected to the Tine 2.0 Broadcasthub websocket server.', async () => {
 
-    const websocketOptions = {
-      headers: {
-        Authorization: `Bearer ${tine20AuthToken}`,
-      }
-    }
+const testMain = function testMain(websocketMessageTimeout, websocketMessageTimeoutFailingAuth) {
 
-    const ws1 = new wslib.WebSocket(process.env.TEST_WS_URL, websocketOptions);
+  test('A websocket client receives a string message through websocket from the Tine 2.0 Broadcasthub which is the same string message that has been published to the Redis broadcasthub channel when a string message is published to the Redis broadcasthub channel, the websocket client has sent a valid Tine 2.0 authorization token as first message and the websocket client has successfully connected to the Tine 2.0 Broadcasthub websocket server.', async () => {
+
+    const ws1 = new wslib.WebSocket(process.env.TEST_WS_URL);
     const expectedWsMessage = 'Broadcast to all clients!';
     var receivedWsMessage = '';
 
     ws1.on('open', () => {
       logD('ws1 client: websocket connection is open');
 
-      redisMessage = 'Broadcast to all clients!';
-      publisher.publish(process.env.REDIS_CHANNEL, redisMessage, () => {
-        logD(`publisher: published message on channel "${process.env.REDIS_CHANNEL}": "${redisMessage}"`);
-      });
+      // Authorize in first message
+      ws1.send(tine20AuthToken);
     });
 
     ws1.on('close', () => {
@@ -36,10 +30,21 @@ const testMain = function testMain() {
     });
 
     ws1.on('message', (message) => {
-      receivedWsMessage = message.toString();
-      logD(`ws1 client: received: ${receivedWsMessage}`);
-      ws1.close();
+      logD(`ws1 client: received: ${message.toString()}`);
+
+      // Trigger broadcast message after receiving first AUTHORIZED message
+      if (message.toString() == 'AUTHORIZED') {
+        redisMessage = 'Broadcast to all clients!';
+        publisher.publish(process.env.REDIS_CHANNEL, redisMessage, () => {
+          logD(`publisher: published message on channel "${process.env.REDIS_CHANNEL}": "${redisMessage}"`);
+        });
+      // Second message has to match expected broadcast message
+      } else {
+        receivedWsMessage = message.toString();
+        ws1.close();
+      }
     });
+
 
     // Ugly workaround to wait for checkTine20AuthToken(token) in wss.onconnect event.
     // Works only with successful expect invocations. Failing expect throws error preventing
@@ -52,16 +57,11 @@ const testMain = function testMain() {
         resolve();
       }, websocketMessageTimeout);
     });
+
   });
 
 
-  test('A websocket client receives a JSON message through websocket from the Tine 2.0 Broadcasthub which is the same JSON message that has been published to the Redis broadcasthub channel when a JSON message is published to the Redis broadcasthub channel, the websocket client has sent a valid Tine 2.0 authorization token as bearer token in the HTTP Authorization header in the initial websocket connection request and the websocket client has successfully connected to the Tine 2.0 Broadcasthub websocket server.', async () => {
-
-    const websocketOptions = {
-      headers: {
-        Authorization: `Bearer ${tine20AuthToken}`,
-      }
-    }
+  test('A websocket client receives a JSON message through websocket from the Tine 2.0 Broadcasthub which is the same JSON message that has been published to the Redis broadcasthub channel when a JSON message is published to the Redis broadcasthub channel, the websocket client has sent a valid Tine 2.0 authorization token as first message and the websocket client has successfully connected to the Tine 2.0 Broadcasthub websocket server.', async () => {
 
     var payload = {
       integer: 5,
@@ -80,17 +80,15 @@ const testMain = function testMain() {
 
     payload = JSON.stringify(payload);
 
-    const ws1 = new wslib.WebSocket(process.env.TEST_WS_URL, websocketOptions);
+    const ws1 = new wslib.WebSocket(process.env.TEST_WS_URL);
     const expectedWsMessage = payload; // Expect JSON
     var receivedWsMessage = '';
 
     ws1.on('open', () => {
       logD('ws1 client: websocket connection is open');
 
-      redisMessage = payload; // Send JSON as message
-      publisher.publish(process.env.REDIS_CHANNEL, redisMessage, () => {
-        logD(`publisher: published message on channel "${process.env.REDIS_CHANNEL}": "${redisMessage}"`);
-      });
+      // Authorize in first message
+      ws1.send(tine20AuthToken);
     });
 
     ws1.on('close', () => {
@@ -98,9 +96,19 @@ const testMain = function testMain() {
     });
 
     ws1.on('message', (message) => {
-      receivedWsMessage = message.toString();
-      logD(`ws1 client: received: ${receivedWsMessage}`);
-      ws1.close();
+      logD(`ws1 client: received: ${message.toString()}`);
+
+      // Trigger broadcast message after receiving first AUTHORIZED message
+      if (message.toString() == 'AUTHORIZED') {
+        redisMessage = payload; // Send JSON as message
+        publisher.publish(process.env.REDIS_CHANNEL, redisMessage, () => {
+          logD(`publisher: published message on channel "${process.env.REDIS_CHANNEL}": "${redisMessage}"`);
+        });
+      // Second message has to match expected broadcast message
+      } else {
+        receivedWsMessage = message.toString();
+        ws1.close();
+      }
     });
 
     // See comment in first test
@@ -113,16 +121,10 @@ const testMain = function testMain() {
   });
 
 
-  test('Two websocket clients receive a string message through websocket from the Tine 2.0 Broadcasthub which is the same string message that has been published to the Redis broadcasthub channel when a string message is published to the Redis broadcasthub channel, the websocket clients have sent a valid Tine 2.0 authorization token as bearer token in the HTTP Authorization header in the initial websocket connection request and the websocket clients have successfully connected to the Tine 2.0 Broadcasthub websocket server.', async () => {
+  test('Two websocket clients receive a string message through websocket from the Tine 2.0 Broadcasthub which is the same string message that has been published to the Redis broadcasthub channel when a string message is published to the Redis broadcasthub channel, the websocket clients have sent a valid Tine 2.0 authorization token as first message and the websocket clients have successfully connected to the Tine 2.0 Broadcasthub websocket server.', async () => {
 
-    const websocketOptions = {
-      headers: {
-        Authorization: `Bearer ${tine20AuthToken}`,
-      }
-    }
-
-    const ws1 = new wslib.WebSocket(process.env.TEST_WS_URL, websocketOptions);
-    const ws2 = new wslib.WebSocket(process.env.TEST_WS_URL, websocketOptions);
+    const ws1 = new wslib.WebSocket(process.env.TEST_WS_URL);
+    const ws2 = new wslib.WebSocket(process.env.TEST_WS_URL);
     const expectedWsMessage = 'Broadcast to all clients!';
     var receivedWsMessage1 = '';
     var receivedWsMessage2 = '';
@@ -130,13 +132,14 @@ const testMain = function testMain() {
     ws1.on('open', () => {
       logD('ws1 client: websocket connection is open');
 
+      // Authorize in first message
+      ws1.send(tine20AuthToken);
+
       ws2.on('open', () => {
         logD('ws2 client: websocket connection is open');
 
-        redisMessage = 'Broadcast to all clients!';
-        publisher.publish(process.env.REDIS_CHANNEL, redisMessage, () => {
-          logD(`publisher: published message on channel "${process.env.REDIS_CHANNEL}": "${redisMessage}"`);
-        });
+        // Authorize in first message
+        ws2.send(tine20AuthToken);
       });
     });
 
@@ -148,17 +151,35 @@ const testMain = function testMain() {
       logD('ws2: closed');
     });
 
+
     ws1.on('message', (message) => {
-      receivedWsMessage1 = message.toString();
-      logD(`ws1 client: received: ${receivedWsMessage1}`);
-      ws1.close();
+      logD(`ws1 client: received: ${message.toString()}`);
+
+      // Trigger broadcast message after receiving first AUTHORIZED message in second client
+      if (message.toString() == 'AUTHORIZED') {
+
+        ws2.on('message', (message) => {
+          logD(`ws2 client: received: ${message.toString()}`);
+
+          if (message.toString() == 'AUTHORIZED') {
+            redisMessage = 'Broadcast to all clients!';
+            publisher.publish(process.env.REDIS_CHANNEL, redisMessage, () => {
+              logD(`publisher: published message on channel "${process.env.REDIS_CHANNEL}": "${redisMessage}"`);
+            });
+          // Second message for second client has to match expected broadcast message
+          } else {
+            receivedWsMessage2 = message.toString();
+            ws2.close();
+          }
+        });
+
+      // Second message for first client has to match expected broadcast message
+      } else {
+        receivedWsMessage1 = message.toString();
+        ws1.close();
+      }
     });
 
-    ws2.on('message', (message) => {
-      receivedWsMessage2 = message.toString();
-       logD(`ws2 client: received: ${receivedWsMessage2}`);
-      ws2.close();
-    });
 
     // See comment in first test
     await new Promise((resolve, reject) => {
@@ -172,95 +193,97 @@ const testMain = function testMain() {
   });
 
 
-  test('A websocket client receives an unexpected HTTP 401 response from the Tine 2.0 Broadcasthub for the websocket HTTP handshake request and the Tine 2.0 Broadchasthub closes the connection to the websocket client when the websocket client sends an invalid Tine 2.0 authorization token as bearer token in the HTTP Authorization header in the initial websocket connection request.', async () => {
+  test('A websocket client receives message "UNAUTHORIZED" from the Tine 2.0 Broadcasthub and the Tine 2.0 Broadchasthub closes the connection to the websocket client when the websocket client sends an invalid Tine 2.0 authorization token as first message.', async () => {
 
-    const websocketOptions = {
-      headers: {
-        Authorization: `Bearer wrongwrong${tine20AuthToken}`, // Send wrong token!
-      }
-    }
-
-    const ws1 = new wslib.WebSocket(process.env.TEST_WS_URL, websocketOptions);
-    const expectedWsClientOpenedConnection = false;
-    const expectedHttpStatus = 401;
-    var wsClientOpenedConnection = false;
-    var receivedHttpStatus = '';
+    const ws1 = new wslib.WebSocket(process.env.TEST_WS_URL);
+    const expectedWsMessage = 'UNAUTHORIZED';
+    var receivedWsMessage = '';
+    var connectionClosed = false;
 
     ws1.on('open', () => {
-      wsClientOpenedConnection = true;
       logD('ws1 client: websocket connection is open');
+
+      // Authorize in first message - wrong token
+      ws1.send('wrongwrong' + tine20AuthToken);
     });
 
-    ws1.on('unexpected-response', (request, response) => {
-      receivedHttpStatus = response.statusCode;
-      logD(`ws1 client: received unexpected response. Status code: ${response.statusCode}. Status message: ${response.statusMessage}`);
+    // Do not close websocket connection, websocket server should close the
+    // connection due to failed authentication
+
+    ws1.on('close', () => {
+      logD('ws1: closed');
+      connectionClosed = true;
+    });
+
+    ws1.on('message', (message) => {
+      logD(`ws1 client: received: ${message.toString()}`);
+      receivedWsMessage = message.toString();
     });
 
 
     // See comment in first test
     await new Promise((resolve, reject) => {
       setTimeout(() => {
-        expect(wsClientOpenedConnection).toBe(expectedWsClientOpenedConnection);
-        expect(receivedHttpStatus).toBe(expectedHttpStatus);
+        expect(receivedWsMessage).toBe(expectedWsMessage);
+        expect(connectionClosed).toBe(true);
         resolve();
-      }, websocketMessageTimeout);
+      }, websocketMessageTimeoutFailingAuth);
     });
 
   });
 
 
-  test('A websocket client receives an unexpected HTTP 401 response from the Tine 2.0 Broadcasthub for the websocket HTTP handshake request and the Tine 2.0 Broadchasthub closes the connection to the websocket client when the websocket client sends no Tine 2.0 authorization token as bearer token in the HTTP Authorization header in the initial websocket connection request.', async () => {
 
-    const websocketOptions = {}; // Do not send HTTP Authorization header!
+  test('A websocket client receives message "UNAUTHORIZED" from the Tine 2.0 Broadcasthub and the Tine 2.0 Broadchasthub closes the connection to the websocket client when the websocket client sends no Tine 2.0 authorization token as first message.', async () => {
 
-    const ws1 = new wslib.WebSocket(process.env.TEST_WS_URL, websocketOptions);
-    const expectedWsClientOpenedConnection = false;
-    const expectedHttpStatus = 401;
-    var wsClientOpenedConnection = false;
-    var receivedHttpStatus = '';
+    const ws1 = new wslib.WebSocket(process.env.TEST_WS_URL);
+    const expectedWsMessage = 'UNAUTHORIZED';
+    var receivedWsMessage = '';
+    var connectionClosed = false;
 
     ws1.on('open', () => {
-      wsClientOpenedConnection = true;
       logD('ws1 client: websocket connection is open');
+
+      // Do NOT authorize in first message
     });
 
-    ws1.on('unexpected-response', (request, response) => {
-      receivedHttpStatus = response.statusCode;
-      logD(`ws1 client: received unexpected response. Status code: ${response.statusCode}. Status message: ${response.statusMessage}`);
+    // Do not close websocket connection, websocket server should close the
+    // connection due to failed authentication
+
+    ws1.on('close', () => {
+      logD('ws1: closed');
+      connectionClosed = true;
+    });
+
+    ws1.on('message', (message) => {
+      logD(`ws1 client: received: ${message.toString()}`);
+      receivedWsMessage = message.toString();
     });
 
 
     // See comment in first test
     await new Promise((resolve, reject) => {
       setTimeout(() => {
-        expect(wsClientOpenedConnection).toBe(expectedWsClientOpenedConnection);
-        expect(receivedHttpStatus).toBe(expectedHttpStatus);
+        expect(receivedWsMessage).toBe(expectedWsMessage);
+        expect(connectionClosed).toBe(true);
         resolve();
-      }, websocketMessageTimeout);
+      }, websocketMessageTimeoutFailingAuth);
     });
 
   });
 
 
-  test('A websocket client receives no message through websocket from the Tine 2.0 Broadcasthub when a message is published to another Redis channel, the websocket client has sent a valid Tine 2.0 authorization token as bearer token in the HTTP Authorization header in the initial websocket connection request and the websocket client has successfully connected to the Tine 2.0 Broadcasthub websocket server.', async () => {
+  test('A websocket client receives no message through websocket from the Tine 2.0 Broadcasthub when a message is published to another Redis channel, the websocket client has sent a valid Tine 2.0 authorization token as first message and the websocket client has successfully connected to the Tine 2.0 Broadcasthub websocket server.', async () => {
 
-    const websocketOptions = {
-      headers: {
-        Authorization: `Bearer ${tine20AuthToken}`,
-      }
-    }
-
-    const ws1 = new wslib.WebSocket(process.env.TEST_WS_URL, websocketOptions);
-    const expectedWsMessage = ''; // Expect empty value, client should not receive any message
+    const ws1 = new wslib.WebSocket(process.env.TEST_WS_URL);
+    const expectedWsMessage = ''; // Expect empty message, client should not receive any other message after first AUTHORIZATION message
     var receivedWsMessage = '';
 
     ws1.on('open', () => {
       logD('ws1 client: websocket connection is open');
 
-      redisMessage = 'An other message to an other channel!';
-      publisher.publish('another_channel', redisMessage, () => {
-        logD(`publisher: published message on channel "another_channel": "${redisMessage}"`);
-      });
+      // Authorize in first message
+      ws1.send(tine20AuthToken);
     });
 
     ws1.on('close', () => {
@@ -268,16 +291,27 @@ const testMain = function testMain() {
     });
 
     ws1.on('message', (message) => {
-      receivedWsMessage = message.toString();
-      logD(`ws1 client: received: ${receivedWsMessage}`);
-      ws1.close();
+      logD(`ws1 client: received: ${message.toString()}`);
+
+      // Trigger broadcast message after receiving first AUTHORIZED message
+      if (message.toString() == 'AUTHORIZED') {
+        redisMessage = 'An other message to an other channel!';
+        publisher.publish('another_channel', redisMessage, () => {
+          logD(`publisher: published message on channel "another_channel": "${redisMessage}"`);
+        });
+      // Second message has to match expected broadcast message
+      } else {
+        receivedWsMessage = message.toString();
+        ws1.close();
+      }
     });
+
 
     // See comment in first test
     await new Promise((resolve, reject) => {
       setTimeout(() => {
         expect(receivedWsMessage).toBe(expectedWsMessage);
-        ws1.close(); // Close websocket client here because onmessage event will never be called
+        ws1.close(); // Close websocket client here because close should not be called above
         resolve();
       }, websocketMessageTimeout);
     });

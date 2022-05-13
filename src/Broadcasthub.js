@@ -63,6 +63,37 @@ const start = function start () {
 
   wss.on('connection', async (ws, req) => {
     logD(`${functionName} - wss: client connected`);
+
+    ws.authenticated = false;
+    ws.authenticationTries = 0;
+
+    const timeout = setTimeout(() => {
+      logD(`${functionName} - wss: client not authorized. Closing the connection.`);
+      ws.send('UNAUTHORIZED');
+      ws.close();
+    }, process.env.AUTH_TIMEOUT);
+
+
+    ws.on('message', async (message) => {
+      logD(`${functionName} - message from client: ${message}`);
+
+      if (ws.authenticated === false && ws.authenticationTries === 0) {
+        // message is buffer!
+        const auth = await checkAuthToken(message.toString());
+
+        logD(`${functionName} - Result from _checkTine20AuthToken: ${auth}`);
+
+        if (auth === true) {
+          clearTimeout(timeout);
+          ws.authenticated = true;
+          ws.authenticationTries++;
+
+          ws.send('AUTHORIZED');
+
+          logD(`${functionName} - wss: client authorized. Keeping the connection.`);
+        }
+      }
+    });
   });
 
   wss.on('close', () => {
@@ -71,29 +102,6 @@ const start = function start () {
 
   httpServer.on('upgrade', async (request, socket, head) => {
     logD(`${functionName} - httpServer: Receiving HTTP UPGRADE request`);
-    logD(`${functionName} - httpServer: client sent header: ${JSON.stringify(request.headers)}`);
-
-    // Reset token for each connection
-    token = null;
-
-    if (request.headers.authorization !== undefined) {
-      // 'Bearer <token>' => '<token>'
-      token = request.headers.authorization.split(' ')[1];
-    }
-
-    var auth = await checkAuthToken(token);
-
-    logD(`${functionName} - Result from _checkTine20AuthToken: ${auth}`);
-
-    if (! auth) {
-      logD(`${functionName} - httpServer: client not authorized. Sending HTTP 401 UNAUTHORIZED and closing the connection.`)
-      socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
-      socket.destroy();
-      return;
-
-    }
-
-    logD(`${functionName} - httpServer: client authorized. Establishing the connection.`);
 
     wss.handleUpgrade(request, socket, head, (ws) => {
       wss.emit('connection', ws, request);
@@ -120,7 +128,8 @@ const start = function start () {
     wss.clients.forEach((client) => {
       // Integrationtests do not work with client !== ws
       //if (client !== ws && client.readyState === wslib.WebSocket.OPEN) {
-      if (client.readyState === wslib.WebSocket.OPEN) {
+      // Only send messages to authenticated clients, see connection handling
+      if (client.readyState === wslib.WebSocket.OPEN && client.authenticated === true) {
         client.send(message);
 
         if (! hitFirstClient) {

@@ -6,7 +6,7 @@ The Tine 2.0 Broadcasthub delivers status messages about files and containers fr
 
 The Tine 2.0 Server publishes messages to a Redis channel. The Tine 2.0 Broadcasthub listens to this channel. Furthermore the Tine 2.0 Broadcasthub is a websocket server. Tine 2.0 clients in the browsers can connect to the Tine 2.0 Broadcasthub as websocket clients. When the Tine 2.0 Broadcasthub receives a message from the Redis channel, then it will send this message to all connected websocket clients.
 
-In order to connect to the Tine 2.0 Broadcasthub websocket server, the Tine 2.0 Cient in the browser has to send a valid Tine 2.0 auth token for the Tine 2.0 broadcasthub channel in the HTTP Authorization header as bearer token in the first request to the Tine 2.0 Broadcasthub websocket server. The Tine 2.0 Broadcasthub verifies the token with a request to the Tine 2.0 server JSON API method `Tinebase.checkAuthToken` during the HTTP handshake for the websocket connection. If the token is valid, the Tine 2.0 Broadcasthub establishes the connection to the websocket client. Otherwise the Tine 2.0 Broadcasthub refuses the websocket connection and sends HTTP 401 as response. This way only authorized Tine 2.0 clients are able to receive the Tine 2.0 Server broadcast messages.
+In order to connect to the Tine 2.0 Broadcasthub websocket server, the Tine 2.0 Cient in the browser has to send a valid Tine 2.0 auth token for the Tine 2.0 broadcasthub channel in the first message within a configureable time to the Tine 2.0 Broadcasthub websocket server. The Tine 2.0 Broadcasthub verifies the token with a request to the Tine 2.0 server JSON API method `Tinebase.checkAuthToken`. If the token is valid, the Tine 2.0 Broadcasthub keeps the connection to the websocket client and sends 'AUHTORIZED' as message. Otherwise the Tine 2.0 Broadcasthub sends 'UNAUTHORIZED' as message and closes the websocket connection. Clients with valid authorization are tagged with a property and only clients with that property receive the Tine 2.0 Server broadcast messages.
 
 The messages the Tine 2.0 Server publishes could be in a JSON format for example, eventually with fields for record ID, container ID, model name, HTTP verb (create, update, delete) that was used at last on the resource. For the Tine 2.0 Broadcasthub it does not matter, what string is published to the Redis channel, it just sends all string messages received from the Redis channel to the Tine 2.0 clients.
 
@@ -17,9 +17,9 @@ Initial development and test setup:
 * Developed and tested on Kubuntu 20.04
 * Tine 2.0 Server with Tine 2.0 JSON API
 * Redis Server
-* node with npm, developed and tested against lts/fermium: node v14.17.5 (npm v7.20.6)
+* node with npm, developed and tested against lts/fermium: node v14.17.5 (npm v7.20.6). Upgraded and tested against lts/gallium v16.15.0 (npm v8.5.5).
 
-Manually tested within the Tine 2.0 docker setup.
+The Broadcasthub is integrated into the `tine20/docker` setup.
 
 
 ## Installation of the Tine 2.0 Broadcasthub ##
@@ -47,6 +47,8 @@ The Tine 2.0 Broadcasthub uses `dotenv` (https://www.npmjs.com/package/dotenv) f
 `REDIS_URL`: URL to the Redis server the Tine 2.0 Broadcast will connect to
 
 `REDIS_CHANNEL`: The Redis channel the Tine 2.0 Broadcasthub will subscribe to
+
+`AUTH_TIMEOUT`: The time in ms the Tine 2.0 Broadcasthub waits for the first message of a client. The Broadcasthub expects a Tine 2.0 auth token in the first message of the client. If no message is sent within the specified time or if the token is not valid the Tine 2.0 Broadcasthub closes the connection to the client.
 
 `WS_PORT`: The port the Tine 2.0 Broadcasthub will expose the websocket server to
 
@@ -103,7 +105,7 @@ Run `npm run-script integrationtest` to execute the integration tests. These tes
 ### End to end tests ###
 Run `npm run-script e2etest` to execute the end to end tests. These tests require an external Redis, an external Tine 2.0 JSON API and an external already running Tine 2.0 Broadcasthub. Like the integration tests the end to end tests setup a Redis publisher and websocket clients and verify that the websocket clients receive the data they should receive.
 
-Often arbitary tests fail because the timeout for waiting for the websocket message is reached. Try to minimize system load by other processes as far as possible, deactivate running virus scanner for example. Alternatively the timeout can be temporarily increased by setting constant `websocketMessageTimeout` in `test/tests/test.js` to a higher value.
+Often arbitary tests fail because the timeout for waiting for the websocket message is reached. Try to minimize system load by other processes as far as possible, deactivate running virus scanner for example. Alternatively the timeout can be temporarily increased by setting the timeouts in `test/e2etest/test.js` to a higher value.
 
 
 ### Tests in Gitlab CI ###
@@ -223,13 +225,17 @@ Type `rs` in the `nodemon` output to force a reload. Or just change/save or `tou
 
 
 ### Setup local Tine 2.0 development instance ###
-In general see README in `tine20-docker` repository. Webpack build etc. for the frontend can be omitted, since we only need the Tine 2.0 Server JSON API.
+In general see README in `tine20/docker` repository. Webpack build etc. for the frontend can be omitted, since we only need the Tine 2.0 Server JSON API.
 
 
 #### Setup auth token channel for development ####
-This has been tested with `tine20-docker` repository, commit `f21cab925f46709efbdf301992967377b533e662`.
+This is already integrated and should be applied automatically in the `tine20/docker` repository. authTokenChanels` is configured in `configs/broadcasthub/broadcasthub.inc.php`, which is mounted in the Broadcasthub container in `compose/broadcasthub.yml`.
 
-Prior to any execution or build in the local `tine20-docker` project modify the following file:
+The entry in table `tine20_auth_token` is generated with the Tine 2.0 setup task `setup.php --add_auth_token --` executed in `cli/Commands/Tine/TineInstallCommand.php`.
+
+This is how it was done before the automation and integration of the Broadcasthub into the the `tine20/docker` setup:
+
+Prior to any execution or build in the local `tine20/docker` project modify the following file:
 
 `configs/conf.d/custom.inc.php`
 
@@ -240,12 +246,12 @@ Prior to any execution or build in the local `tine20-docker` project modify the 
      ],
 
 
-When the local Tine 2.0 Server is up, open phpMyAdmin (see `tine20-docker` README) and add this record:
+When the local Tine 2.0 Server is up, open phpMyAdmin (see `tine20/docker` README) and add this record:
 
     INSERT INTO tine20_auth_token (id, auth_token, account_id, valid_until, channels) VALUES ('longlongid', 'longlongtoken', (select id from tine20_accounts where login_name = "tine20admin"), ADDDATE(NOW(), INTERVAL 1 YEAR), '["broadcasthub"]');
 
 
-For later commits of `tine20-docker` which already include the Tine 2.0 Broadcasthub copy the `.pullup.json` to `pullup.json` and remove entry `broadcasthub` from the key `composeFiles`. This way the startup of the Tine 2.0 Broadcasthub should be prevented within the Tine 2.0 docker setup.
+For later commits of `tine20/docker` which already include the Tine 2.0 Broadcasthub copy the `.pullup.json` to `pullup.json` and remove entry `broadcasthub` from the key `composeFiles`. This way the startup of the Tine 2.0 Broadcasthub should be prevented within the Tine 2.0 docker setup.
 
 
 ### Start local Redis server ###

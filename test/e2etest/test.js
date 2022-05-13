@@ -26,6 +26,17 @@ afterAll(() => {
 
 describe('The Tine 2.0 broadcasthub is running: broadcasthub websocket server is running, Redis is available, broadcasthub Redis client subscribed to the broadcasthub channel and the Tine 2.0 JSON API is available.', () => {
 
-  require(`${__base}test/tests/test.js`)();
+  // process.env.AUTH_TIMEOUT for Broadcasthub cannot be overridden here
+  // because Broadcasthub is started indenpendently from the tests
+
+  // So:
+  // process.env.AUTH_TIMEOUT < websocketMessageTimeoutFailingAuth < Jest Timeout
+
+  const websocketMessageTimeout = 1000;
+  const websocketMessageTimeoutFailingAuth = parseInt(process.env.AUTH_TIMEOUT) + 100;
+
+  jest.setTimeout(websocketMessageTimeoutFailingAuth + 100);
+
+  require(`${__base}test/tests/test.js`)(websocketMessageTimeout, websocketMessageTimeoutFailingAuth);
 
 });

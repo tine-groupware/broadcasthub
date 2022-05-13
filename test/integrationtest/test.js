@@ -125,6 +125,16 @@ afterAll(() => {
 
 describe('The Tine 2.0 broadcasthub is running: broadcasthub websocket server is running, Redis is available (mock), broadcasthub Redis client subscribed to the broadcasthub channel and the Tine 2.0 JSON API is available (mock).', () => {
 
-  require(`${__base}test/tests/test.js`)();
+  // Set AUTH_TIMEOUT for tests as low as possible
+  // This is only possible in integrationtest where Broadcasthub is started
+  // within the tests
+  process.env.AUTH_TIMEOUT = 100;
+
+  const websocketMessageTimeout = 500;
+  const websocketMessageTimeoutFailingAuth = websocketMessageTimeout;
+
+  // Jest default timeout for a test is 5000 ms.
+
+  require(`${__base}test/tests/test.js`)(websocketMessageTimeout, websocketMessageTimeoutFailingAuth);
 
 });

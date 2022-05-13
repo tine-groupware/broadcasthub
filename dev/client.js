@@ -1,20 +1,14 @@
 require('dotenv').config();
 const wslib = require('ws');
 
-const options = {
-  headers: {
-    // Token has to be configured in local Tine 2.0 development instance
-    // See README.md
-    Authorization: 'Bearer longlongtoken',
-  }
-}
-
 // Client 1 connects successfully to Broadcasthub (valid auth token)
 // Use fixed string for websocket URL to prevent something going wrong on production
-const ws1 = new wslib.WebSocket('ws://localhost:8080', options);
+const ws1 = new wslib.WebSocket('ws://localhost:8080');
 
 ws1.on('open', () => {
   console.log('client 1 connected to server');
+  // Send authorization token as first message
+  ws1.send('longlongtoken');
 });
 
 ws1.on('message', (message) => {
@@ -36,7 +30,7 @@ ws1.on('error', (err) => {
 
 
 // Client 2 does not connect to Broadcasthub, i.e. Broadcasthub closes the connection
-// immediatley (no auth token)
+// immediatley (no first message with token)
 // Use fixed string for websocket URL to prevent something going wrong on production
 const ws2 = new wslib.WebSocket('ws://localhost:8080');
 
