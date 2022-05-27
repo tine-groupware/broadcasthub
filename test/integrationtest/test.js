@@ -10,7 +10,7 @@ const logD = Logger.Debug;
 const fetchMock = require('node-fetch');
 
 const Broadcasthub = require(`${__base}src/Broadcasthub.js`);
-const tine20AuthToken = require(`${__base}test/Util/Tine20AuthToken`);
+const tine20Auth = require(`${__base}test/Util/Tine20Auth`);
 const publisher = require(`${__base}test/Util/RedisPublisher.js`);
 
 if (process.env.TEST_INTEGRATION_WS_URL === undefined || process.env.TEST_INTEGRATION_WS_URL == '') {
@@ -26,8 +26,14 @@ beforeAll(() => {
   // -----------------------------
   // Setup fetch-mock-jest - START
 
+  // ATTENTION! All regex special characters have to be escaped twice if they should be treated as
+  // non special characters! Special characters from within variable values seem not to be effected?
+  // When using RegExp the complete URL including query string has to be specified.
+  // Whereas plain string non regexp url 'http://localhost:4000/index.php' works without query string.
+  const regex = new RegExp(`^(http:\\/\\/localhost:4000\\/index.php\\?requestType=JSON)|(http:\\/\\/tenant(1|2|3).my-domain.test:4000\\/index.php\\?requestType=JSON)$`);
+
   const matchObject = {
-    url: "http://localhost:4000/index.php",
+    url: regex,
     headers: {
       'Content-Type': 'application/json'
     },
@@ -41,7 +47,7 @@ beforeAll(() => {
     id: "id",
     method: "Tinebase.checkAuthToken",
     params: {
-      token: tine20AuthToken,
+      token: tine20Auth.token,
       channel: "broadcasthub"
     }
   };
@@ -136,5 +142,9 @@ describe('The Tine 2.0 broadcasthub is running: broadcasthub websocket server is
   // Jest default timeout for a test is 5000 ms.
 
   require(`${__base}test/tests/test.js`)(websocketMessageTimeout, websocketMessageTimeoutFailingAuth);
+
+  const redisPublishTimeout = websocketMessageTimeout / 2; // 250
+  const beforeRedisPublisTimeout = redisPublishTimeout / 2; // 125
+  require(`${__base}test/tests/test-multitenancy.test.js`)(websocketMessageTimeout, websocketMessageTimeoutFailingAuth, redisPublishTimeout, beforeRedisPublisTimeout);
 
 });

@@ -1,4 +1,5 @@
 const fetch = require('node-fetch');
+const url = require('url');
 
 const Logger = require(`${__base}src/Logger.js`);
 //const logI = Logger.Info;
@@ -8,26 +9,64 @@ const logD = Logger.Tine20AuthTokenChecker; // Debug
 const moduleName = 'Tine20AuthTokenChecker';
 
 
-const checkAuthToken = async function checkAuthToken(token = null) {
+const checkAuthToken = async function checkAuthToken(authMessage = null) {
   const functionName = 'checkAuthToken';
-  logD(`${functionName} - token: ${token}`);
-
-  if (token === null) {
-    return false;
+  logD(`${functionName} - authMessage: ${authMessage}`);
+  var creds;
+  var regex;
+  var authUrl;
+  var result = {
+    valid: false,
   }
+
+
+  if (authMessage === null) {
+    return result;
+  }
+
+  try {
+    creds = JSON.parse(authMessage);
+  } catch (e) {
+    logE(e);
+    logD(`${functionName} - Parsing creds as JSON failed`);
+    return result;
+  }
+
+  if (creds.jsonApiUrl === undefined || creds.jsonApiUrl === '' ||
+      creds.token === undefined || creds.token === ''
+    ) {
+    logD(`${functionName} - jsonApiUrl or token is not defined or empty string in creds`);
+    return result;
+  }
+
+  regex = new RegExp(`^${process.env.TINE20_JSON_API_URL_PATTERN}$`);
+  if (! creds.jsonApiUrl.match(regex)) {
+    logD(`${functionName} - jsonApiUrl does not match process.env.TINE20_JSON_API_URL_PATTERN`);
+    return result;
+  }
+
+  try {
+    authUrl = new URL(`${creds.jsonApiUrl}/index.php?requestType=JSON`);
+  } catch (e) {
+    logE(e);
+    logD(`${functionName} - Parsing creds.jsonApiUrl as URL failed`);
+    return result;
+  }
+
+  result.domain = authUrl.hostname;
 
   var body = {
     jsonrpc: "2.0",
     id: "id",
     method: "Tinebase.checkAuthToken",
     params: {
-      token: token,
-      channel: process.env.TINE20_BROADCAST_CHANNEL
+      token: creds.token,
+      channel: process.env.REDIS_CHANNEL
     }
   };
 
   try {
-    res = await fetch(process.env.TINE20_JSON_API_URL, {
+    res = await fetch(authUrl.href, {
             method: 'post',
             body:    JSON.stringify(body),
             headers: { 'Content-Type': 'application/json' },
@@ -69,18 +108,19 @@ const checkAuthToken = async function checkAuthToken(token = null) {
     }
     */
 
-    if (responseBody.error === undefined && responseBody.result !== undefined && responseBody.result.auth_token === token) {
+    if (responseBody.error === undefined && responseBody.result !== undefined && responseBody.result.auth_token === creds.token) {
       logD(`${functionName} - Result: true`);
-      return true;
+      result.valid = true;
+      return result;
     } else {
       logD(`${functionName} - Result: false`);
-      return false;
+      return result;
     }
 
   } catch (e) {
     logE(e);
     logD(`${functionName} - Result: false`);
-    return false;
+    return result;
   }
 }
 

@@ -17,6 +17,12 @@ var wss;
 var subscriber;
 const httpServer = createServer();
 
+// Global to be able to manage channels the Broadcasthub is currently listening to.
+// Holds domain names the websocket clients have authorized against, see connection handling
+// domain: URL without protocol, port, path, querystring.
+// https://my-domain1.test:8080/my-path?myQuery=String => my-domain.test
+var domains = [];
+
 
 const start = function start () {
   const functionName = 'start';
@@ -48,10 +54,13 @@ const start = function start () {
   subscriber.on('error', (error) => {
     logE(error);
     // Exit or implement proper retry strategy
-    process.exit(1);
+    // process.exit(1);
+    // Exit made sense for single tenancy broadcasthub with only one static
+    // channel to listen to.
+    // With switch to multi-tenancy enabling multiple arbitrary channels to listen to
+    // dynamically on demand (automatically subscribing / unsubscribing) the application should
+    // not exit on error for one of many channels.
   });
-
-  subscriber.subscribe(process.env.REDIS_CHANNEL);
 
 
   // ----------------------
@@ -61,11 +70,13 @@ const start = function start () {
     logI(`${moduleName}.${functionName} - Started websocket server.`);
   });
 
+
   wss.on('connection', async (ws, req) => {
     logD(`${functionName} - wss: client connected`);
 
     ws.authenticated = false;
     ws.authenticationTries = 0;
+    ws.domain = null;
 
     const timeout = setTimeout(() => {
       logD(`${functionName} - wss: client not authorized. Closing the connection.`);
@@ -81,9 +92,9 @@ const start = function start () {
         // message is buffer!
         const auth = await checkAuthToken(message.toString());
 
-        logD(`${functionName} - Result from _checkTine20AuthToken: ${auth}`);
+        logD(`${functionName} - Result from _checkTine20AuthToken: ${JSON.stringify(auth)}`);
 
-        if (auth === true) {
+        if (auth.valid === true) {
           clearTimeout(timeout);
           ws.authenticated = true;
           ws.authenticationTries++;
@@ -91,14 +102,69 @@ const start = function start () {
           ws.send('AUTHORIZED');
 
           logD(`${functionName} - wss: client authorized. Keeping the connection.`);
+
+          // Tag each client with the domain it is authenticated against and
+          // for which it should receive broadcast messages
+          var domain = auth.domain;
+          ws.domain = domain;
+
+          logD(`${functionName} - wss: ws.domain = ${domain}`);
+
+          // Subscribe Redis listener to channel of new domain
+          if (! domains.includes(domain)) {
+            logD(`${functionName} - wss: hit new domain ${domain} not in domains: "${JSON.stringify(domains)}"`);
+
+            subscriber.subscribe(`${domain}:${process.env.REDIS_CHANNEL}`);
+
+            logI(`${moduleName}.${functionName} - wss: New domain "${domain}". Added Redis subscriber for channel "${domain}:${process.env.REDIS_CHANNEL}"`);
+
+            domains.push(domain);
+
+            logI(`${moduleName}.${functionName} - wss: New domain "${domain}". Added to domains: ${JSON.stringify(domains)}`);
+          }
         }
+      }
+    });
+
+
+    // On client close:
+    // Search for remaining active, authenticated clients registered to the same domain
+    // Remove domain when there is no active client anymore
+    ws.on('close', () => {
+
+      // Nothing to do for non authenticated clients
+      // Only authenticated clients are tagged with domain
+      // and trigger Redis subscription for new domains
+      if (ws.authenticated === false) {
+        return;
+      }
+
+      var hitFirstClient = false;
+      var domain = ws.domain;
+
+      wss.clients.forEach((client) => {
+        if (client.readyState === wslib.WebSocket.OPEN &&
+            client.authenticated === true &&
+            client.domain === ws.domain) {
+
+          hitFirstClient = true;
+          return;
+        }
+      });
+
+      if (! hitFirstClient) {
+        logI(`${moduleName}.${functionName} - wss: ws client closes, no other active client for domain "${domain}" found. Removing the domain.`);
+
+        removeDomain(domain);
       }
     });
   });
 
+
   wss.on('close', () => {
     logI(`${moduleName}.${functionName} - Stopped websocket server.`);
   });
+
 
   httpServer.on('upgrade', async (request, socket, head) => {
     logD(`${functionName} - httpServer: Receiving HTTP UPGRADE request`);
@@ -109,6 +175,7 @@ const start = function start () {
 
   });
 
+
   httpServer.on('close', () => {
     logI(`${moduleName}.${functionName} - httpServer: Stopped httpServer.`);
   });
@@ -117,8 +184,9 @@ const start = function start () {
 
 
   // -----------------------------------
-  // Pass through all message from Redis
-  // subscription to all websocket clients
+  // Pass through all message from Redis subscription to all websocket clients.
+  // Clients from one domain only receive messages for that domain
+  // Channels are prefixed with the domain, clients are tagged with the domain
 
   subscriber.on('message', (channel, message) => {
     logD(`${functionName} - Redis subscriber: received message on channel "${channel}": "${message}"`);
@@ -126,10 +194,11 @@ const start = function start () {
     var hitFirstClient = false;
 
     wss.clients.forEach((client) => {
-      // Integrationtests do not work with client !== ws
-      //if (client !== ws && client.readyState === wslib.WebSocket.OPEN) {
       // Only send messages to authenticated clients, see connection handling
-      if (client.readyState === wslib.WebSocket.OPEN && client.authenticated === true) {
+      // Only send messages to clients that are tagged with the channel prefix
+      if (client.readyState === wslib.WebSocket.OPEN &&
+          client.authenticated === true &&
+          channel === `${client.domain}:${process.env.REDIS_CHANNEL}`) {
         client.send(message);
 
         if (! hitFirstClient) {
@@ -139,6 +208,16 @@ const start = function start () {
       }
     });
 
+    // Remove domain when there is no active client anymore
+    if (! hitFirstClient) {
+      // -1 for colon
+      var domain = channel.substring(0, channel.length - process.env.REDIS_CHANNEL.length - 1);
+
+      logI(`${moduleName}.${functionName} - Broadcast message to clients of domain "${domain}". No active client found. Removing domain.`);
+
+      removeDomain(domain);
+    }
+
   });
 
   logI(`${moduleName}.${functionName} - Finished with startup procedure.`);
@@ -146,12 +225,51 @@ const start = function start () {
 
 
 const stop = function stop () {
-  const functionName = 'start';
+  const functionName = 'stop';
   logI(`${moduleName}.${functionName} - Begin with teardown procedure...`);
   subscriber.quit();
   wss.close();
   httpServer.close();
   logI(`${moduleName}.${functionName} - Finished teardown procedure.`);
+}
+
+
+/**
+ * Remove domain from domains list and stop Redis subscriber for that domain
+ *
+ * domains and subscriber are global vars.
+ *
+ * @param string domain  The domain to remove
+ */
+const removeDomain = function removeDomain(domain = null) {
+  const functionName = 'removeDomain';
+
+  logD(`${functionName} - hitting removeDomain`);
+
+  if (domain === null || domain === '') {
+    logD(`${functionName} - domain is null or empty string. Not removing anything.`);
+    return;
+  }
+
+  logD(`${functionName} - list of domains before removal: ${JSON.stringify(domains)}`);
+
+  logI(`${functionName} - remove domain "${domain}" from domains list`);
+
+  for( var i = 0; i < domains.length; i++){
+    if ( domains[i] === domain) {
+      domains.splice(i, 1);
+      // In undesired case that the domain is listed more than once:
+      // Decrease counter after removal to match the next element after
+      // resetting the keys
+      i--;
+    }
+  }
+
+  logD(`${functionName} - list of domains after removal: ${JSON.stringify(domains)}`);
+
+  subscriber.unsubscribe(`${domain}:${process.env.REDIS_CHANNEL}`);
+
+  logI(`${functionName} - unsubscribed Redis subscriber from channel "${domain}:${process.env.REDIS_CHANNEL}"`);
 }
 
 

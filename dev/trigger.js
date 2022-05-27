@@ -13,7 +13,7 @@ publisher.on('error', (error) => {
 
 // Simulates the Tine 2.0 Server publishing a message into the Redis channel
 // the Broadcasthub listens to
-var channel = process.env.REDIS_CHANNEL;
+var channel = `localhost:${process.env.REDIS_CHANNEL}`;
 var message = 'Broadcast to all clients!';
 publisher.publish(channel, message, () => {
   console.log('channel: ' + channel);

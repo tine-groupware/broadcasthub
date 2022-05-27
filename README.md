@@ -2,13 +2,45 @@
 [[_TOC_]]
 
 ## What is this for? ##
-The Tine 2.0 Broadcasthub delivers status messages about files and containers from the Tine 2.0 Server to the Tine 2.0 Client in the browser. One use case would be to mark files in the Tine 2.0 file manager that are currently opened in the Tine 2.0 OnlyOffice integration.
+The Tine 2.0 Broadcasthub was built to deliver status messages about files and containers from the Tine 2.0 Server to the Tine 2.0 Client in the browser. One use case would be to mark files in the Tine 2.0 file manager that are currently opened in the Tine 2.0 OnlyOffice integration by other users. But in general the Broadcasthub just pipes through any message it receives, it is up to the Tine 2.0 Server what to send.
 
-The Tine 2.0 Server publishes messages to a Redis channel. The Tine 2.0 Broadcasthub listens to this channel. Furthermore the Tine 2.0 Broadcasthub is a websocket server. Tine 2.0 clients in the browsers can connect to the Tine 2.0 Broadcasthub as websocket clients. When the Tine 2.0 Broadcasthub receives a message from the Redis channel, then it will send this message to all connected websocket clients.
+The Tine 2.0 Server publishes messages to a Redis channel. The Tine 2.0 Broadcasthub listens to this channel. Furthermore the Tine 2.0 Broadcasthub is a websocket server. Tine 2.0 clients in the browsers can connect to the Tine 2.0 Broadcasthub as websocket clients. When the Tine 2.0 Broadcasthub receives a message from the Redis channel, then it sends this message to all connected websocket clients.
 
-In order to connect to the Tine 2.0 Broadcasthub websocket server, the Tine 2.0 Cient in the browser has to send a valid Tine 2.0 auth token for the Tine 2.0 broadcasthub channel in the first message within a configureable time to the Tine 2.0 Broadcasthub websocket server. The Tine 2.0 Broadcasthub verifies the token with a request to the Tine 2.0 server JSON API method `Tinebase.checkAuthToken`. If the token is valid, the Tine 2.0 Broadcasthub keeps the connection to the websocket client and sends 'AUHTORIZED' as message. Otherwise the Tine 2.0 Broadcasthub sends 'UNAUTHORIZED' as message and closes the websocket connection. Clients with valid authorization are tagged with a property and only clients with that property receive the Tine 2.0 Server broadcast messages.
+The Tine 2.0 Broadcasthub can handle multiple tenants. It routes Redis messages from one Tine 2.0 Server instance to all websocket clients associated to that instance. The Tine 2.0 Server instances have to publish their messages to one shared Redis instance the Broadcasthub is also connected to. Each Tine 2.0 Server has to prefix its channel with its domain name. All Tine 2.0 Server instances have to use the same channel name after the prefix (Broadcasthub env `REDIS_CHANNEL`):
 
-The messages the Tine 2.0 Server publishes could be in a JSON format for example, eventually with fields for record ID, container ID, model name, HTTP verb (create, update, delete) that was used at last on the resource. For the Tine 2.0 Broadcasthub it does not matter, what string is published to the Redis channel, it just sends all string messages received from the Redis channel to the Tine 2.0 clients.
+        // Tine 2.0 Server URL
+        http://tenant1.my-domain.test
+
+        // Domain
+        tenant1.my-domain.test
+
+        // Prefixed Redis channel for that instance
+        // when env REDIS_CHANNEL = broadcasthub
+        tenant1.my-domain.test:broadcasthub
+
+In order to connect to the Tine 2.0 Broadcasthub websocket server, the Tine 2.0 Client in the browser has to send a JSON authentication string as the first message within a configureable time (env `AUTH_TIMEOUT`) to the Tine 2.0 Broadcasthub websocket server. The JSON has to include a valid Tine 2.0 auth token for the Tine 2.0 broadcasthub channel and the URL to its Tine 2.0 Server JSON API:
+
+        // Scheme
+        {
+            token: <auth_token>,
+            jsonAPIUrl: <url_with_protocol_domain_port>
+        }
+
+        // Example:
+        {
+            token: longlongtoken,
+            jsonAPIUrl: http://tenant1.my-domain.test
+        }
+
+The URL sent in the JSON has to match the pattern in the environment variable `TINE20_JSON_API_URL_PATTERN`. In case of non matching URLs the authentication is declined, clients receive 'UNAUTHORIZED' message and websocket connection is closed. This is a security measure to restrict communication of the Broadcasthub to a known set of Tine 2.0 Server instances.
+
+As next step the Tine 2.0 Broadcasthub verifies the token with a request to the Tine 2.0 server JSON API method `Tinebase.checkAuthToken` using the URL from the JSON. If the token is valid, the Tine 2.0 Broadcasthub keeps the connection to the websocket client and sends 'AUTHORIZED' as message. Otherwise the Tine 2.0 Broadcasthub sends 'UNAUTHORIZED' as message and closes the websocket connection. Clients with valid authorization are tagged with an auth property and only clients with that auth property receive the Tine 2.0 Server broadcast messages.
+
+Each authenticated client is also tagged with a domain property. The domain is extracted from the URL sent in the first message. For new domains the Broadcasthub subscribes to a Redis channel prefixed with that domain. All Redis messages from that channel prefixed with the domain are sent to all websocket clients tagged with that domain.
+
+When there is no client anymore associated to a domain, the Broadcasthub stops listening to the Redis channel prefixed with that domain. When a new websocket client from that domain connects the Broadcasthub starts listening to the channel again and pipes through the messages to the client.
+
+In order to publish status messages about files and containers the Tine 2.0 Server could send messages in a JSON format for example, eventually with fields for record ID, container ID, model name and HTTP verb (create, update, delete) that was used at last on the resource. For the Tine 2.0 Broadcasthub it does not matter, what string is published to the Redis channel, it just sends all string messages received from the Redis channel to the corresponding Tine 2.0 clients.
 
 
 ## Prerequisites to run the Tine 2.0 Broadcasthub ##
@@ -44,17 +76,15 @@ Development and CI:
 ## Configuration of the Tine 2.0 Broadcasthub ##
 The Tine 2.0 Broadcasthub uses `dotenv` (https://www.npmjs.com/package/dotenv) for configuration. See file `.env-dist` for available variables. The file can be copied to `.env` and the variable values can be adapted as needed.
 
-`REDIS_URL`: URL to the Redis server the Tine 2.0 Broadcast will connect to
+`REDIS_URL`: URL to the Redis server the Tine 2.0 Broadcast will connect to. All Tine 2.0 Server instances have publish messages to this common Redis server.
 
-`REDIS_CHANNEL`: The Redis channel the Tine 2.0 Broadcasthub will subscribe to
+`REDIS_CHANNEL`: The name of the channel the Tine 2.0 auth token sent by the websocket client is valid for in the Tine 2.0 Server instance. Each Tine 2.0 Server publishes to that Redis channel. The Broadcasthub listens to that Redis channel. In order to distinguish the messages of the different Tine 2.0 Server instances each Tine 2.0 Server instance prefixes this channel name with its domain and the Broadcasthub listens to the different prefixed channels.
 
 `AUTH_TIMEOUT`: The time in ms the Tine 2.0 Broadcasthub waits for the first message of a client. The Broadcasthub expects a Tine 2.0 auth token in the first message of the client. If no message is sent within the specified time or if the token is not valid the Tine 2.0 Broadcasthub closes the connection to the client.
 
 `WS_PORT`: The port the Tine 2.0 Broadcasthub will expose the websocket server to
 
-`TINE20_JSON_API_URL`: The URL (including protocol, domain, path and query string etc.) of the Tine 2.0 JSON API
-
-`TINE20_BROADCAST_CHANNEL`: The name of the channel the Tine 2.0 auth token should be valid for, that is sent by the clients in the first request to the Tine 2.0 Broadcasthub websocket server.
+`TINE20_JSON_API_URL_PATTERN`: The pattern each Tine 2.0 JSON API URL has to match against. This is a security measure to restrict communication of the Broadcasthub to a known set of Tine 2.0 Server instances.
 
 `DEBUG_DEFAULT_LOGGING`: Value "on" enables logging of all loggers in the `debug` namespaces `Tine20Broadcasthub:Info:*` and `Tine20Broadcasthub:Error:*`. All other values or removing this key deactivate the default logging.
 
@@ -103,7 +133,13 @@ Run `npm run-script integrationtest` to execute the integration tests. These tes
 
 
 ### End to end tests ###
-Run `npm run-script e2etest` to execute the end to end tests. These tests require an external Redis, an external Tine 2.0 JSON API and an external already running Tine 2.0 Broadcasthub. Like the integration tests the end to end tests setup a Redis publisher and websocket clients and verify that the websocket clients receive the data they should receive.
+Run `npm run-script e2etest` to execute the end to end tests. These tests require an external Redis, an external Tine 2.0 JSON API and an external already running Tine 2.0 Broadcasthub. In addition the test domains used in the multi-tenancy tests need to point to the external Tine 2.0 JSON API. If you run the tests locally and use the Tine 2.0 docker setup then you can edit your `/etc/hosts` file and resolve the test domains to 127.0.0.1:
+
+        127.0.0.1   tenant1.my-domain.test
+        127.0.0.1   tenant2.my-domain.test
+        127.0.0.1   tenant3.my-domain.test
+
+Like the integration tests the end to end tests setup a Redis publisher and websocket clients and verify that the websocket clients receive the data they should receive.
 
 Often arbitary tests fail because the timeout for waiting for the websocket message is reached. Try to minimize system load by other processes as far as possible, deactivate running virus scanner for example. Alternatively the timeout can be temporarily increased by setting the timeouts in `test/e2etest/test.js` to a higher value.
 

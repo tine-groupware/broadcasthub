@@ -7,8 +7,9 @@ const Logger = require(`${__base}test/Util/Logger.js`);
 const logE = Logger.Error;
 const logD = Logger.Test;
 
+const fetch = require('node-fetch');
+
 const Broadcasthub = require(`${__base}src/Broadcasthub.js`);
-const tine20AuthToken = require(`${__base}test/Util/Tine20AuthToken`);
 const publisher = require(`${__base}test/Util/RedisPublisher.js`);
 
 if (process.env.TEST_E2E_WS_URL === undefined || process.env.TEST_E2E_WS_URL == '') {
@@ -32,11 +33,27 @@ describe('The Tine 2.0 broadcasthub is running: broadcasthub websocket server is
   // So:
   // process.env.AUTH_TIMEOUT < websocketMessageTimeoutFailingAuth < Jest Timeout
 
-  const websocketMessageTimeout = 1000;
+  var websocketMessageTimeout = 1000;
   const websocketMessageTimeoutFailingAuth = parseInt(process.env.AUTH_TIMEOUT) + 100;
 
   jest.setTimeout(websocketMessageTimeoutFailingAuth + 100);
 
   require(`${__base}test/tests/test.js`)(websocketMessageTimeout, websocketMessageTimeoutFailingAuth);
+
+
+  test('Checking if tine API is available on test domains - on local machines with one tine docker instance on 127.0.0.1 you just need to add /etc/hosts entries for the test domains: 127.0.0.1 <testdomain>', async () => {
+    var response = await fetch('http://tenant1.my-domain.test:4000');
+    expect(response.status).toBe(200);
+    var response = await fetch('http://tenant2.my-domain.test:4000');
+    expect(response.status).toBe(200);
+    var response = await fetch('http://tenant3.my-domain.test:4000');
+    expect(response.status).toBe(200);
+  });
+
+  websocketMessageTimeout = 2000;
+  const redisPublishTimeout = 1500;
+  const beforeRedisPublishTimeout = 800;
+
+  require(`${__base}test/tests/test-multitenancy.test.js`)(websocketMessageTimeout, websocketMessageTimeoutFailingAuth, redisPublishTimeout, beforeRedisPublishTimeout);
 
 });
