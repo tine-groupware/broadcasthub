@@ -14,6 +14,8 @@ var redisPrefix = 'localhost';
 
 const testMain = function testMain(websocketMessageTimeout, websocketMessageTimeoutFailingAuth) {
 
+  logD(`process.env.ENABLE_MULTITENANCY_MODE: ${process.env.ENABLE_MULTITENANCY_MODE}`);
+
   test('A websocket client receives a string message through websocket from the Tine 2.0 Broadcasthub which is the same string message that has been published to the Redis broadcasthub channel when a string message is published to the Redis broadcasthub channel, the websocket client has sent a valid Tine 2.0 authorization token as first message and the websocket client has successfully connected to the Tine 2.0 Broadcasthub websocket server.', async () => {
 
     const ws1 = new wslib.WebSocket(process.env.TEST_WS_URL);

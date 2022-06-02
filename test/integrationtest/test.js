@@ -1,3 +1,21 @@
+/*
+Jest test suite for integration tests of the Tine 2.0 Broadcasthub
+
+TZ has to be set to UTC as environment variable on jest invocation, see package.json.
+
+This test suite has to be invoked twice, one time with ENABLE_MULTITENANCY_MODE = false and an other time with ENABLE_MULTITENANCY_MODE = true. In this way tests for single tenancy mode and tests for multiple tenancy mode are executed. See package.json.
+
+Invocation of integration tests:
+
+TZ=UTC ENABLE_MULTITENANCY_MODE=false jest --config=./test/integrationtest/jest.config.js './test/integrationtest/*test.js' && TZ=UTC ENABLE_MULTITENANCY_MODE=true jest --config=./test/integrationtest/jest.config.js './test/integrationtest/*test.js'
+
+If first test run fails, the second test run is not executed. Results of first test run are the last output.
+
+If first test run succeeds, the results of the second test run are the last output.
+
+Return value is 0 if both test runs succeed. Return value is 1 if first or second test run fails.
+*/
+
 const path = require('path');
 global.__base = path.resolve(__dirname + '../../..') + '/';
 
@@ -19,6 +37,18 @@ if (process.env.TEST_INTEGRATION_WS_URL === undefined || process.env.TEST_INTEGR
 }
 
 process.env.TEST_WS_URL = process.env.TEST_INTEGRATION_WS_URL;
+
+// Set AUTH_TIMEOUT for tests as low as possible
+// This is only possible in integrationtest where Broadcasthub is started
+// within the tests
+process.env.AUTH_TIMEOUT = 100;
+
+const websocketMessageTimeout = 500;
+const websocketMessageTimeoutFailingAuth = websocketMessageTimeout;
+const redisPublishTimeout = websocketMessageTimeout / 2; // 250
+const beforeRedisPublisTimeout = redisPublishTimeout / 2; // 125
+
+// Jest default timeout for a test is 5000 ms.
 
 
 beforeAll(() => {
@@ -42,12 +72,23 @@ beforeAll(() => {
     }
   };
 
+
+  var token = null;
+
+  if (process.env.ENABLE_MULTITENANCY_MODE == 'false') {
+    token = tine20Auth;
+  }
+
+  if (process.env.ENABLE_MULTITENANCY_MODE == 'true') {
+    token = tine20Auth.token;
+  }
+
   const expectedBody = {
     jsonrpc: "2.0",
     id: "id",
     method: "Tinebase.checkAuthToken",
     params: {
-      token: tine20Auth.token,
+      token: token,
       channel: "broadcasthub"
     }
   };
@@ -98,6 +139,8 @@ beforeAll(() => {
 
     logD(`fetchMock Tine 2.0 API - request url: ${url}`);
     logD(`fetchMock Tine 2.0 API - request options: ${JSON.stringify(options)}`);
+    logD(`fetchMock Tine 2.0 API - matchObject: ${JSON.stringify(matchObject)}`);
+    logD(`fetchMock Tine 2.0 API - expectedBody: ${JSON.stringify(expectedBody)}`);
 
     const requestBody = JSON.parse(options.body);
 
@@ -129,22 +172,21 @@ afterAll(() => {
 });
 
 
-describe('The Tine 2.0 broadcasthub is running: broadcasthub websocket server is running, Redis is available (mock), broadcasthub Redis client subscribed to the broadcasthub channel and the Tine 2.0 JSON API is available (mock).', () => {
+if (process.env.ENABLE_MULTITENANCY_MODE == 'false') {
+  describe('The Tine 2.0 broadcasthub is running in single tenancy mode: broadcasthub websocket server is running, Redis is available (mock), broadcasthub Redis client subscribed to the broadcasthub channel and the Tine 2.0 JSON API is available (mock).', () => {
 
-  // Set AUTH_TIMEOUT for tests as low as possible
-  // This is only possible in integrationtest where Broadcasthub is started
-  // within the tests
-  process.env.AUTH_TIMEOUT = 100;
+    require(`${__base}test/tests/single-tenancy-mode-base.test.js`)(websocketMessageTimeout, websocketMessageTimeoutFailingAuth);
 
-  const websocketMessageTimeout = 500;
-  const websocketMessageTimeoutFailingAuth = websocketMessageTimeout;
+  });
+}
 
-  // Jest default timeout for a test is 5000 ms.
+if (process.env.ENABLE_MULTITENANCY_MODE == 'true') {
+  describe('The Tine 2.0 broadcasthub is running in multiple tenancy mode: broadcasthub websocket server is running, Redis is available (mock), broadcasthub Redis client subscribed to the broadcasthub channel and the Tine 2.0 JSON API is available (mock).', () => {
 
-  require(`${__base}test/tests/test.js`)(websocketMessageTimeout, websocketMessageTimeoutFailingAuth);
+    require(`${__base}test/tests/multi-tenancy-mode-single-tenant-base.test.js`)(websocketMessageTimeout, websocketMessageTimeoutFailingAuth);
 
-  const redisPublishTimeout = websocketMessageTimeout / 2; // 250
-  const beforeRedisPublisTimeout = redisPublishTimeout / 2; // 125
-  require(`${__base}test/tests/test-multitenancy.test.js`)(websocketMessageTimeout, websocketMessageTimeoutFailingAuth, redisPublishTimeout, beforeRedisPublisTimeout);
+    require(`${__base}test/tests/multi-tenancy-mode-multiple-tenants.test.js`)(websocketMessageTimeout, websocketMessageTimeoutFailingAuth, redisPublishTimeout, beforeRedisPublisTimeout);
 
-});
+  });
+}
+

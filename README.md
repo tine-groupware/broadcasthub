@@ -6,7 +6,29 @@ The Tine 2.0 Broadcasthub was built to deliver status messages about files and c
 
 The Tine 2.0 Server publishes messages to a Redis channel. The Tine 2.0 Broadcasthub listens to this channel. Furthermore the Tine 2.0 Broadcasthub is a websocket server. Tine 2.0 clients in the browsers can connect to the Tine 2.0 Broadcasthub as websocket clients. When the Tine 2.0 Broadcasthub receives a message from the Redis channel, then it sends this message to all connected websocket clients.
 
-The Tine 2.0 Broadcasthub can handle multiple tenants. It routes Redis messages from one Tine 2.0 Server instance to all websocket clients associated to that instance. The Tine 2.0 Server instances have to publish their messages to one shared Redis instance the Broadcasthub is also connected to. Each Tine 2.0 Server has to prefix its channel with its domain name. All Tine 2.0 Server instances have to use the same channel name after the prefix (Broadcasthub env `REDIS_CHANNEL`):
+In order to publish status messages about files and containers the Tine 2.0 Server could send messages in a JSON format for example, eventually with fields for record ID, container ID, model name and HTTP verb (create, update, delete) that was used at last on the resource. For the Tine 2.0 Broadcasthub it does not matter, what string is published to the Redis channel, it just sends all string messages received from the Redis channel to the corresponding Tine 2.0 clients.
+
+
+### Single tenancy mode ###
+Set `ENABLE_MULTITENANCY_MODE` to `false` to enable single tenancy mode.
+
+In single tenancy mode the Tine 2.0 Broadcasthub routes Redis messages from one single Tine 2.0 Server instance to all websocket clients associated to that instance. The Tine 2.0 Server instance publishes its messages to the Redis instance the Broadcasthub is also connected to. The Redis channel the Tine 2.0 Broadcasthub is listening to and the Tine 2.0 Server instance is publishing to has to be set in Broadcasthub env `REDIS_CHANNEL`.
+
+In order to connect to the Tine 2.0 Broadcasthub websocket server, the Tine 2.0 Cient in the browser has to send a valid Tine 2.0 auth token for the Tine 2.0 broadcasthub channel in the first message within a configureable time to the Tine 2.0 Broadcasthub websocket server:
+
+        // Scheme
+        <auth_token>
+
+        // Example
+        longlongtoken
+
+The Tine 2.0 Broadcasthub verifies the token with a request to the Tine 2.0 server JSON API method `Tinebase.checkAuthToken` using the URL set in Broadcasthub env `TINE20_JSON_API_URL`. If the token is valid, the Tine 2.0 Broadcasthub keeps the connection to the websocket client and sends 'AUHTORIZED' as message. Otherwise the Tine 2.0 Broadcasthub sends 'UNAUTHORIZED' as message and closes the websocket connection. Clients with valid authorization are tagged with a property and only clients with that property receive the Tine 2.0 Server broadcast messages.
+
+
+### Multiple tenancy mode ###
+Set `ENABLE_MULTITENANCY_MODE` to `true` to enable multiple tenancy mode.
+
+The Tine 2.0 Broadcasthub can handle multiple tenants. It routes Redis messages from multiple Tine 2.0 Server instances to all websocket clients associated to these instances. Each websocket client belongs to one Tine 2.0 server instance only. The Tine 2.0 Server instances have to publish their messages to one shared Redis instance the Broadcasthub is also connected to. Each Tine 2.0 Server has to prefix its channel with its domain name. All Tine 2.0 Server instances have to use the same channel name after the prefix (Broadcasthub env `REDIS_CHANNEL`):
 
         // Tine 2.0 Server URL
         http://tenant1.my-domain.test
@@ -39,8 +61,6 @@ As next step the Tine 2.0 Broadcasthub verifies the token with a request to the 
 Each authenticated client is also tagged with a domain property. The domain is extracted from the URL sent in the first message. For new domains the Broadcasthub subscribes to a Redis channel prefixed with that domain. All Redis messages from that channel prefixed with the domain are sent to all websocket clients tagged with that domain.
 
 When there is no client anymore associated to a domain, the Broadcasthub stops listening to the Redis channel prefixed with that domain. When a new websocket client from that domain connects the Broadcasthub starts listening to the channel again and pipes through the messages to the client.
-
-In order to publish status messages about files and containers the Tine 2.0 Server could send messages in a JSON format for example, eventually with fields for record ID, container ID, model name and HTTP verb (create, update, delete) that was used at last on the resource. For the Tine 2.0 Broadcasthub it does not matter, what string is published to the Redis channel, it just sends all string messages received from the Redis channel to the corresponding Tine 2.0 clients.
 
 
 ## Prerequisites to run the Tine 2.0 Broadcasthub ##
@@ -84,7 +104,11 @@ The Tine 2.0 Broadcasthub uses `dotenv` (https://www.npmjs.com/package/dotenv) f
 
 `WS_PORT`: The port the Tine 2.0 Broadcasthub will expose the websocket server to
 
-`TINE20_JSON_API_URL_PATTERN`: The pattern each Tine 2.0 JSON API URL has to match against. This is a security measure to restrict communication of the Broadcasthub to a known set of Tine 2.0 Server instances.
+`ENABLE_MULTITENANCY_MODE`: When set to `false`, the Tine 2.0 Broadcasthub runs in single tenancy mode. When set to true, the Tine 2.0 Broadcasthub runs in multiple tenancy mode. `ENABLE_MULTITENANCY_MODE` has either to be set to true or to false
+
+`TINE20_JSON_API_URL`: The URL of the Tine 2.0 JSON API without path and querystring. This var has to be set when `ENABLE_MULTITENANCY_MODE` is `false`
+
+`TINE20_JSON_API_URL_PATTERN`: The pattern each Tine 2.0 JSON API URL has to match against. This is a security measure to restrict communication of the Broadcasthub to a known set of Tine 2.0 Server instances. This var has to be set when `ENABLE_MULTITENANCY_MODE` is `true`
 
 `DEBUG_DEFAULT_LOGGING`: Value "on" enables logging of all loggers in the `debug` namespaces `Tine20Broadcasthub:Info:*` and `Tine20Broadcasthub:Error:*`. All other values or removing this key deactivate the default logging.
 
@@ -133,7 +157,7 @@ Run `npm run-script integrationtest` to execute the integration tests. These tes
 
 
 ### End to end tests ###
-Run `npm run-script e2etest` to execute the end to end tests. These tests require an external Redis, an external Tine 2.0 JSON API and an external already running Tine 2.0 Broadcasthub. In addition the test domains used in the multi-tenancy tests need to point to the external Tine 2.0 JSON API. If you run the tests locally and use the Tine 2.0 docker setup then you can edit your `/etc/hosts` file and resolve the test domains to 127.0.0.1:
+Run `npm run-script e2etest` to execute the end to end tests. Broadcasthub env `ENABLE_MULTITENANCY_MODE` has to be set to `false` for testing single tenancy mode and in an other run to `true` for testing multi tennancy mode. These tests require an external Redis, an external Tine 2.0 JSON API and an external already running Tine 2.0 Broadcasthub. In addition the test domains used in the multi-tenancy tests need to point to the external Tine 2.0 JSON API. If you run the tests locally and use the Tine 2.0 docker setup then you can edit your `/etc/hosts` file and resolve the test domains to 127.0.0.1:
 
         127.0.0.1   tenant1.my-domain.test
         127.0.0.1   tenant2.my-domain.test

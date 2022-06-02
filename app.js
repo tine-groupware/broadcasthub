@@ -3,7 +3,6 @@ global.__base = `${__dirname}/`;
 
 require('dotenv').config();
 
-const debug = require('debug');
 const Logger = require(`${__base}src/Logger.js`);
 const logI = Logger.Info;
 //const logE = Logger.Error;

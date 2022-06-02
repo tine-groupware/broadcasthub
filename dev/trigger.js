@@ -1,6 +1,16 @@
 require('dotenv').config();
 const redis = require('redis');
 
+var channel = null;
+
+if (process.env.ENABLE_MULTITENANCY_MODE == 'false') {
+  channel = process.env.REDIS_CHANNEL;
+}
+
+if (process.env.ENABLE_MULTITENANCY_MODE == 'true') {
+  channel = `localhost:${process.env.REDIS_CHANNEL}`;
+}
+
 const redisOptions = {
   url: 'redis://localhost:7379', // Use fixed string to prevent something going wrong on production
 };
@@ -13,7 +23,6 @@ publisher.on('error', (error) => {
 
 // Simulates the Tine 2.0 Server publishing a message into the Redis channel
 // the Broadcasthub listens to
-var channel = `localhost:${process.env.REDIS_CHANNEL}`;
 var message = 'Broadcast to all clients!';
 publisher.publish(channel, message, () => {
   console.log('channel: ' + channel);

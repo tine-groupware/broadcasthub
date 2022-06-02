@@ -14,6 +14,8 @@ var redisPrefix = 'localhost';
 
 const testMain = function testMain(websocketMessageTimeout, websocketMessageTimeoutFailingAuth, redisPublishTimeout, beforeRedisPublishTimeout) {
 
+  logD(`process.env.ENABLE_MULTITENANCY_MODE: ${process.env.ENABLE_MULTITENANCY_MODE}`);
+
   test('Six clients from three domains get the correct messages', async () => {
 
     const ws1 = new wslib.WebSocket(process.env.TEST_WS_URL);

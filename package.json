@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node app.js",
     "e2etest": "TZ=UTC jest './test/e2etest/*test.js'",
-    "integrationtest": "TZ=UTC jest --config=./test/integrationtest/jest.config.js './test/integrationtest/*test.js'"
+    "integrationtest": "TZ=UTC ENABLE_MULTITENANCY_MODE=false jest --config=./test/integrationtest/jest.config.js './test/integrationtest/*test.js' && TZ=UTC ENABLE_MULTITENANCY_MODE=true jest --config=./test/integrationtest/jest.config.js './test/integrationtest/*test.js'"
   },
   "keywords": [
     "Tine 2.0",

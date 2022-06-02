@@ -1,3 +1,15 @@
+/*
+Jest test suite for e2e tests of the Tine 2.0 Broadcasthub
+
+TZ has to be set to UTC as environment variable on jest invocation, see package.json.
+
+In order to test the Broadcasthub in single tenancy and in multiple tenanacy mode two separate test runs are necessary.
+
+First run: Set ENABLE_MULTITENANCY_MODE to false in .env. Run e2etest. Single tenancy mode is tested.
+
+Second run: Set ENABLE_MULTITENANCY_MODE to true in .env. Run e2etest. Multiple tenancy mode is tested.
+*/
+
 const path = require('path');
 global.__base = path.resolve(__dirname + '../../..') + '/';
 
@@ -38,22 +50,27 @@ describe('The Tine 2.0 broadcasthub is running: broadcasthub websocket server is
 
   jest.setTimeout(websocketMessageTimeoutFailingAuth + 100);
 
-  require(`${__base}test/tests/test.js`)(websocketMessageTimeout, websocketMessageTimeoutFailingAuth);
+  if (process.env.ENABLE_MULTITENANCY_MODE == 'false') {
+    require(`${__base}test/tests/single-tenancy-mode-base.test.js`)(websocketMessageTimeout, websocketMessageTimeoutFailingAuth);
+  }
 
+  if (process.env.ENABLE_MULTITENANCY_MODE == 'true') {
+    require(`${__base}test/tests/multi-tenancy-mode-single-tenant-base.test.js`)(websocketMessageTimeout, websocketMessageTimeoutFailingAuth);
 
-  test('Checking if tine API is available on test domains - on local machines with one tine docker instance on 127.0.0.1 you just need to add /etc/hosts entries for the test domains: 127.0.0.1 <testdomain>', async () => {
-    var response = await fetch('http://tenant1.my-domain.test:4000');
-    expect(response.status).toBe(200);
-    var response = await fetch('http://tenant2.my-domain.test:4000');
-    expect(response.status).toBe(200);
-    var response = await fetch('http://tenant3.my-domain.test:4000');
-    expect(response.status).toBe(200);
-  });
+    test('Checking if tine API is available on test domains - on local machines with one tine docker instance on 127.0.0.1 you just need to add /etc/hosts entries for the test domains: 127.0.0.1 <testdomain>', async () => {
+      var response = await fetch('http://tenant1.my-domain.test:4000');
+      expect(response.status).toBe(200);
+      var response = await fetch('http://tenant2.my-domain.test:4000');
+      expect(response.status).toBe(200);
+      var response = await fetch('http://tenant3.my-domain.test:4000');
+      expect(response.status).toBe(200);
+    });
 
-  websocketMessageTimeout = 2000;
-  const redisPublishTimeout = 1500;
-  const beforeRedisPublishTimeout = 800;
+    websocketMessageTimeout = 2000;
+    const redisPublishTimeout = 1500;
+    const beforeRedisPublishTimeout = 800;
 
-  require(`${__base}test/tests/test-multitenancy.test.js`)(websocketMessageTimeout, websocketMessageTimeoutFailingAuth, redisPublishTimeout, beforeRedisPublishTimeout);
+    require(`${__base}test/tests/multi-tenancy-mode-multiple-tenants.test.js`)(websocketMessageTimeout, websocketMessageTimeoutFailingAuth, redisPublishTimeout, beforeRedisPublishTimeout);
+  }
 
 });

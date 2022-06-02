@@ -1,10 +1,21 @@
 require('dotenv').config();
 const wslib = require('ws');
 
-const tine20Auth = {
-  token: 'longlongtoken',
-  jsonApiUrl: 'http://localhost:4000'
-};
+var tine20AuthString = null;
+
+if (process.env.ENABLE_MULTITENANCY_MODE == 'false') {
+  tine20AuthString = 'longlongtoken';
+}
+
+if (process.env.ENABLE_MULTITENANCY_MODE == 'true') {
+  const tine20Auth = {
+    token: 'longlongtoken',
+    jsonApiUrl: 'http://localhost:4000'
+  };
+
+  tine20AuthString = JSON.stringify(tine20Auth);
+}
+
 
 // Client 1 connects successfully to Broadcasthub (valid auth token)
 // Use fixed string for websocket URL to prevent something going wrong on production
@@ -13,7 +24,7 @@ const ws1 = new wslib.WebSocket('ws://localhost:8080');
 ws1.on('open', () => {
   console.log('client 1 connected to server');
   // Send authorization token as first message
-  ws1.send(JSON.stringify(tine20Auth));
+  ws1.send(tine20AuthString);
 });
 
 ws1.on('message', (message) => {

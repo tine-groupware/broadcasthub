@@ -11,6 +11,33 @@ const logD = Logger.Broadcasthub; // Debug
 
 const moduleName = 'Broadcasthub';
 
+if (process.env.ENABLE_MULTITENANCY_MODE === undefined ||
+    process.env.ENABLE_MULTITENANCY_MODE === null ||
+    process.env.ENABLE_MULTITENANCY_MODE === '') {
+  logE('app - ENABLE_MULTITENANCY_MODE is not set. Exiting...');
+  process.exit(1);
+}
+
+if (process.env.ENABLE_MULTITENANCY_MODE == 'false' && (
+    process.env.TINE20_JSON_API_URL === undefined ||
+    process.env.TINE20_JSON_API_URL === null ||
+    process.env.TINE20_JSON_API_URL === ''
+  )
+  ) {
+  logE('app - ENABLE_MULTITENANCY_MODE is false but TINE20_JSON_API_URL is not set. Exiting...');
+  process.exit(1);
+}
+
+if (process.env.ENABLE_MULTITENANCY_MODE == 'true' && (
+    process.env.TINE20_JSON_API_URL_PATTERN === undefined ||
+    process.env.TINE20_JSON_API_URL_PATTERN === null ||
+    process.env.TINE20_JSON_API_URL_PATTERN === ''
+  )
+  ) {
+  logE('app - ENABLE_MULTITENANCY_MODE is true but TINE20_JSON_API_URL_PATTERN is not set. Exiting...');
+  process.exit(1);
+}
+
 // Global in module for stopping the Broadcasthub
 // Necessary for integration tests
 var wss;
@@ -27,6 +54,7 @@ var domains = [];
 const start = function start () {
   const functionName = 'start';
   logI(`${moduleName}.${functionName} - Begin with startup procedure...`);
+  logI(`${moduleName}.${functionName} - Broadcasthub is running with ENABLE_MULTITENANCY_MODE = "${process.env.ENABLE_MULTITENANCY_MODE}"`);
   var token;
   var auth;
 
@@ -53,14 +81,25 @@ const start = function start () {
 
   subscriber.on('error', (error) => {
     logE(error);
-    // Exit or implement proper retry strategy
-    // process.exit(1);
-    // Exit made sense for single tenancy broadcasthub with only one static
-    // channel to listen to.
-    // With switch to multi-tenancy enabling multiple arbitrary channels to listen to
-    // dynamically on demand (automatically subscribing / unsubscribing) the application should
-    // not exit on error for one of many channels.
+
+    if (process.env.ENABLE_MULTITENANCY_MODE == 'false') {
+      // Exit or implement proper retry strategy
+      process.exit(1);
+      // Exit makes sense for single tenancy broadcasthub with only one static
+      // channel to listen to.
+      // With switch to multi-tenancy enabling multiple arbitrary channels to
+      // listen to dynamically on demand (automatically subscribing /
+      // unsubscribing) the application should not exit on error for one of many
+      // channels.
+    }
   });
+
+  // Subscribe to static channel in single tenancy mode.
+  // In multi tenancy mode channel subscription is handled on demand when
+  // websocket connection is established
+  if (process.env.ENABLE_MULTITENANCY_MODE == 'false') {
+    subscriber.subscribe(process.env.REDIS_CHANNEL);
+  }
 
 
   // ----------------------
@@ -103,24 +142,27 @@ const start = function start () {
 
           logD(`${functionName} - wss: client authorized. Keeping the connection.`);
 
-          // Tag each client with the domain it is authenticated against and
-          // for which it should receive broadcast messages
-          var domain = auth.domain;
-          ws.domain = domain;
+          if (process.env.ENABLE_MULTITENANCY_MODE == 'true') {
 
-          logD(`${functionName} - wss: ws.domain = ${domain}`);
+            // Tag each client with the domain it is authenticated against and
+            // for which it should receive broadcast messages
+            var domain = auth.domain;
+            ws.domain = domain;
 
-          // Subscribe Redis listener to channel of new domain
-          if (! domains.includes(domain)) {
-            logD(`${functionName} - wss: hit new domain ${domain} not in domains: "${JSON.stringify(domains)}"`);
+            logD(`${functionName} - wss: ws.domain = ${domain}`);
 
-            subscriber.subscribe(`${domain}:${process.env.REDIS_CHANNEL}`);
+            // Subscribe Redis listener to channel of new domain
+            if (! domains.includes(domain)) {
+              logD(`${functionName} - wss: hit new domain ${domain} not in domains: "${JSON.stringify(domains)}"`);
 
-            logI(`${moduleName}.${functionName} - wss: New domain "${domain}". Added Redis subscriber for channel "${domain}:${process.env.REDIS_CHANNEL}"`);
+              subscriber.subscribe(`${domain}:${process.env.REDIS_CHANNEL}`);
 
-            domains.push(domain);
+              logI(`${moduleName}.${functionName} - wss: New domain "${domain}". Added Redis subscriber for channel "${domain}:${process.env.REDIS_CHANNEL}"`);
 
-            logI(`${moduleName}.${functionName} - wss: New domain "${domain}". Added to domains: ${JSON.stringify(domains)}`);
+              domains.push(domain);
+
+              logI(`${moduleName}.${functionName} - wss: New domain "${domain}". Added to domains: ${JSON.stringify(domains)}`);
+            }
           }
         }
       }
@@ -132,10 +174,11 @@ const start = function start () {
     // Remove domain when there is no active client anymore
     ws.on('close', () => {
 
+      // Nothing to do in single tenancy mode
       // Nothing to do for non authenticated clients
       // Only authenticated clients are tagged with domain
       // and trigger Redis subscription for new domains
-      if (ws.authenticated === false) {
+      if (process.env.ENABLE_MULTITENANCY_MODE == 'false' || ws.authenticated === false) {
         return;
       }
 
@@ -155,7 +198,7 @@ const start = function start () {
       if (! hitFirstClient) {
         logI(`${moduleName}.${functionName} - wss: ws client closes, no other active client for domain "${domain}" found. Removing the domain.`);
 
-        removeDomain(domain);
+        _removeDomain(domain);
       }
     });
   });
@@ -193,29 +236,48 @@ const start = function start () {
 
     var hitFirstClient = false;
 
-    wss.clients.forEach((client) => {
-      // Only send messages to authenticated clients, see connection handling
-      // Only send messages to clients that are tagged with the channel prefix
-      if (client.readyState === wslib.WebSocket.OPEN &&
-          client.authenticated === true &&
-          channel === `${client.domain}:${process.env.REDIS_CHANNEL}`) {
-        client.send(message);
 
-        if (! hitFirstClient) {
-          logD(`${functionName} - wss: sent message to first client: "${message}"`);
-          hitFirstClient = true;
+    if (process.env.ENABLE_MULTITENANCY_MODE == 'false') {
+      wss.clients.forEach((client) => {
+        // Only send messages to authenticated clients, see connection handling
+        if (client.readyState === wslib.WebSocket.OPEN &&
+            client.authenticated === true) {
+          client.send(message);
+
+          if (! hitFirstClient) {
+            logD(`${functionName} - wss: sent message to first client: "${message}"`);
+            hitFirstClient = true;
+          }
         }
+      });
+    }
+
+
+    if (process.env.ENABLE_MULTITENANCY_MODE == 'true') {
+      wss.clients.forEach((client) => {
+        // Only send messages to authenticated clients, see connection handling
+        // Only send messages to clients that are tagged with the channel prefix
+        if (client.readyState === wslib.WebSocket.OPEN &&
+            client.authenticated === true &&
+            channel === `${client.domain}:${process.env.REDIS_CHANNEL}`) {
+          client.send(message);
+
+          if (! hitFirstClient) {
+            logD(`${functionName} - wss: sent message to first client: "${message}"`);
+            hitFirstClient = true;
+          }
+        }
+      });
+
+      // Remove domain when there is no active client anymore
+      if (! hitFirstClient) {
+        // -1 for colon
+        var domain = channel.substring(0, channel.length - process.env.REDIS_CHANNEL.length - 1);
+
+        logI(`${moduleName}.${functionName} - Broadcast message to clients of domain "${domain}". No active client found. Removing domain.`);
+
+        _removeDomain(domain);
       }
-    });
-
-    // Remove domain when there is no active client anymore
-    if (! hitFirstClient) {
-      // -1 for colon
-      var domain = channel.substring(0, channel.length - process.env.REDIS_CHANNEL.length - 1);
-
-      logI(`${moduleName}.${functionName} - Broadcast message to clients of domain "${domain}". No active client found. Removing domain.`);
-
-      removeDomain(domain);
     }
 
   });
@@ -241,10 +303,10 @@ const stop = function stop () {
  *
  * @param string domain  The domain to remove
  */
-const removeDomain = function removeDomain(domain = null) {
-  const functionName = 'removeDomain';
+const _removeDomain = function _removeDomain(domain = null) {
+  const functionName = '_removeDomain';
 
-  logD(`${functionName} - hitting removeDomain`);
+  logD(`${functionName} - hitting _removeDomain`);
 
   if (domain === null || domain === '') {
     logD(`${functionName} - domain is null or empty string. Not removing anything.`);
