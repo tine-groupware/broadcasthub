@@ -72,23 +72,12 @@ beforeAll(() => {
     }
   };
 
-
-  var token = null;
-
-  if (process.env.ENABLE_MULTITENANCY_MODE == 'false') {
-    token = tine20Auth;
-  }
-
-  if (process.env.ENABLE_MULTITENANCY_MODE == 'true') {
-    token = tine20Auth.token;
-  }
-
   const expectedBody = {
     jsonrpc: "2.0",
     id: "id",
     method: "Tinebase.checkAuthToken",
     params: {
-      token: token,
+      token: tine20Auth.token,
       channel: "broadcasthub"
     }
   };

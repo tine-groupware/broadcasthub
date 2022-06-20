@@ -24,7 +24,7 @@ const testMain = function testMain(websocketMessageTimeout, websocketMessageTime
       logD('ws1 client: websocket connection is open');
 
       // Authorize in first message
-      ws1.send(tine20Auth);
+      ws1.send(JSON.stringify(tine20Auth));
     });
 
     ws1.on('close', () => {
@@ -90,7 +90,7 @@ const testMain = function testMain(websocketMessageTimeout, websocketMessageTime
       logD('ws1 client: websocket connection is open');
 
       // Authorize in first message
-      ws1.send(tine20Auth);
+      ws1.send(JSON.stringify(tine20Auth));
     });
 
     ws1.on('close', () => {
@@ -135,13 +135,13 @@ const testMain = function testMain(websocketMessageTimeout, websocketMessageTime
       logD('ws1 client: websocket connection is open');
 
       // Authorize in first message
-      ws1.send(tine20Auth);
+      ws1.send(JSON.stringify(tine20Auth));
 
       ws2.on('open', () => {
         logD('ws2 client: websocket connection is open');
 
         // Authorize in first message
-        ws2.send(tine20Auth);
+        ws2.send(JSON.stringify(tine20Auth));
       });
     });
 
@@ -206,7 +206,7 @@ const testMain = function testMain(websocketMessageTimeout, websocketMessageTime
       logD('ws1 client: websocket connection is open');
 
       // Authorize in first message - wrong token
-      ws1.send('wrongwrong' + tine20Auth);
+      ws1.send(JSON.stringify({token: 'wrongwrong' + tine20Auth.token}));
     });
 
     // Do not close websocket connection, websocket server should close the
@@ -285,7 +285,7 @@ const testMain = function testMain(websocketMessageTimeout, websocketMessageTime
       logD('ws1 client: websocket connection is open');
 
       // Authorize in first message
-      ws1.send(tine20Auth);
+      ws1.send(JSON.stringify(tine20Auth));
     });
 
     ws1.on('close', () => {

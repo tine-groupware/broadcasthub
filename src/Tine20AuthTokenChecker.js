@@ -46,7 +46,7 @@ const checkAuthToken = async function checkAuthToken(authMessage = null) {
  * is the same for all clients. It has to be set as environment variable
  * TINE20_JSON_API_URL in the Broadcasthub.
  *
- * @param string authMessage  The Tine 2.0 channel token to be verified
+ * @param JSON authMessage  A JSON holding the field token. Field token is string and holds the Tine 2.0 channel token.
  *
  * @return object result  result.valid is true for valid token and false for invalid token
  *
@@ -63,8 +63,21 @@ const _checkAuthTokenInSingleTenancyMode = async function _checkAuthTokenInSingl
     return result;
   }
 
+  try {
+    creds = JSON.parse(authMessage);
+  } catch (e) {
+    logE(e);
+    logD(`${functionName} - Parsing creds as JSON failed`);
+    return result;
+  }
+
+  if (creds.token === undefined || creds.token === '') {
+    logD(`${functionName} - token is not defined or empty string in creds`);
+    return result;
+  }
+
   // authMessage is supposed to hold the token as string
-  result.valid = await _checkAuthToken(`${process.env.TINE20_JSON_API_URL}/index.php?requestType=JSON`, authMessage);
+  result.valid = await _checkAuthToken(`${process.env.TINE20_JSON_API_URL}/index.php?requestType=JSON`, creds.token);
 
   return result;
 }
@@ -96,6 +109,7 @@ const _checkAuthTokenInMultiTenancyMode = async function _checkAuthTokenInMultiT
 
 
   if (authMessage === null || authMessage == '') {
+    logD(`${functionName} - token is null or empty string in creds`);
     return result;
   }
 

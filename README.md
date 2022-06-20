@@ -14,13 +14,17 @@ Set `ENABLE_MULTITENANCY_MODE` to `false` to enable single tenancy mode.
 
 In single tenancy mode the Tine 2.0 Broadcasthub routes Redis messages from one single Tine 2.0 Server instance to all websocket clients associated to that instance. The Tine 2.0 Server instance publishes its messages to the Redis instance the Broadcasthub is also connected to. The Redis channel the Tine 2.0 Broadcasthub is listening to and the Tine 2.0 Server instance is publishing to has to be set in Broadcasthub env `REDIS_CHANNEL`.
 
-In order to connect to the Tine 2.0 Broadcasthub websocket server, the Tine 2.0 Cient in the browser has to send a valid Tine 2.0 auth token for the Tine 2.0 broadcasthub channel in the first message within a configureable time to the Tine 2.0 Broadcasthub websocket server:
+In order to connect to the Tine 2.0 Broadcasthub websocket server, the Tine 2.0 Cient in the browser has to send a JSON authentication string as the first message within a configureable time to the Tine 2.0 Broadcasthub websocket server. The JSON has to include a valid Tine 2.0 auth token for the Tine 2.0 broadcasthub channel:
 
         // Scheme
-        <auth_token>
+        {
+            token: <auth_token>
+        }
 
-        // Example
-        longlongtoken
+        // Example:
+        {
+            token: longlongtoken
+        }
 
 The Tine 2.0 Broadcasthub verifies the token with a request to the Tine 2.0 server JSON API method `Tinebase.checkAuthToken` using the URL set in Broadcasthub env `TINE20_JSON_API_URL`. If the token is valid, the Tine 2.0 Broadcasthub keeps the connection to the websocket client and sends 'AUHTORIZED' as message. Otherwise the Tine 2.0 Broadcasthub sends 'UNAUTHORIZED' as message and closes the websocket connection. Clients with valid authorization are tagged with a property and only clients with that property receive the Tine 2.0 Server broadcast messages.
 

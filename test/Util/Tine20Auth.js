@@ -1,7 +1,9 @@
 var tine20Auth = null;
 
 if (process.env.ENABLE_MULTITENANCY_MODE == 'false') {
-  tine20Auth = 'longlongtoken';
+  tine20Auth = {
+    token: 'longlongtoken'
+  };
 }
 
 if (process.env.ENABLE_MULTITENANCY_MODE == 'true') {
