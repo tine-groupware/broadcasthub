@@ -3,7 +3,7 @@
 scriptDir=$(dirname "$0")
 projectRoot=${scriptDir}/..
 
-. ${projectRoot}/build/tag.sh
+. ${projectRoot}/build/local_tag.sh
 
 echo "Are you sure to push \"$tag\" to registry, existing tag will be overridden (yes/no)? "
 read answer
