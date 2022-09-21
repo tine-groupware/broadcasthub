@@ -136,20 +136,14 @@ Stop:
 
 
 ## Build and push production container image ##
-* Make sure to tag the commit you want run the build for and to checkout that tag
-* Make sure your local repository is clean
-* Execute the integration and e2e tests locally and make sure everything is fine
-* Push the tag into the remote repository
-* Then run:
-
-        sh build/docker-build-prod.sh
-        sh build/docker-push-prod.sh
-
-This will build the docker image based on the current source code status (gets copied into the image) and push the image into the Metaways Gitlab registry. The image will be tagged with the current GIT tag.
-
-The Tine 2.0 docker setup depends on this container image.
-
-The build scripts work fine when the GIT client uses a SSH key for authentication. The build scripts have not been tested with interactive username / password prompt.
+* Make sure your local changes are working by running the tests and manual testing
+* Merge your changes into master branch
+* Set a new tag on the commit and push it
+* Gitlab CI will build the image and publish it to the docker registries, see `.gitlab-ci.yml` for details
+* The credentials for the registries are stored as project variables in Gitlab
+* The image will be tagged with the tag on the commit
+* tine and the tine docker setup depend on this container image
+* Gitlab CI is trigged by any tag in any branch, so be careful with pushing tags
 
 
 ## Tests ##
@@ -322,3 +316,25 @@ For later commits of `tine20/docker` which already include the Tine 2.0 Broadcas
 
     cd dev/redis-docker
     docker-compose up -d
+
+
+### Test production image locally ###
+* Code changes can be tested like described in previous sections
+* But changes in the docker image (`Dockerfile`) should be tested like described in this section before they are pushed into the registries
+* Build the docker image locally:
+
+        cd <project_dir>
+        docker build -t dockerregistry.metaways.net/tine20/tine20-broadcasthub:X.Y-test .
+
+* Set the tag `X.Y-test` in tine docker setup in `docker-compose` file for the Broadcasthub
+* Start tine docker setup
+* Perform manual tests with test client `dev/client.js`
+
+    * Change the Broadcasthub port in `dev/client.js` to the one used by the tine docker setup
+    * Run the client from the project directory: `node dev/client.js`
+    * Create, change and delete a file in the local tine in the file manager
+    * The test client should print the messages from the Broadcasthub
+
+Integration tests do not work in the production image since development dependencies are not installed.
+
+E2E tests cannot be run against the Broadcasthub container in the tine docker setup since redis is not exposed and thus the redis publisher in the tests cannot publish messages which should be received by the clients in the tests.
