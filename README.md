@@ -136,20 +136,14 @@ Stop:
 
 
 ## Build and push production container image ##
-* Make sure to tag the commit you want run the build for and to checkout that tag
-* Make sure your local repository is clean
-* Execute the integration and e2e tests locally and make sure everything is fine
-* Push the tag into the remote repository
-* Then run:
-
-        sh build/docker-build-prod.sh
-        sh build/docker-push-prod.sh
-
-This will build the docker image based on the current source code status (gets copied into the image) and push the image into the Metaways Gitlab registry. The image will be tagged with the current GIT tag.
-
-The Tine 2.0 docker setup depends on this container image.
-
-The build scripts work fine when the GIT client uses a SSH key for authentication. The build scripts have not been tested with interactive username / password prompt.
+* Make sure your local changes are working by running the tests and manual testing
+* Merge your changes into master branch
+* Set a new tag on the commit and push it
+* Gitlab CI will build the image and publish it to the docker registries, see `.gitlab-ci.yml` for details
+* The credentials for the registries are stored as project variables in Gitlab
+* The image will be tagged with the tag on the commit
+* tine and the tine docker setup depend on this container image
+* Gitlab CI is trigged by any tag in any branch, so be careful with pushing tags
 
 
 ## Tests ##
