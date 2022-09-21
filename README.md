@@ -316,3 +316,25 @@ For later commits of `tine20/docker` which already include the Tine 2.0 Broadcas
 
     cd dev/redis-docker
     docker-compose up -d
+
+
+### Test production image locally ###
+* Code changes can be tested like described in previous sections
+* But changes in the docker image (`Dockerfile`) should be tested like described in this section before they are pushed into the registries
+* Build the docker image locally:
+
+        cd <project_dir>
+        docker build -t dockerregistry.metaways.net/tine20/tine20-broadcasthub:X.Y-test .
+
+* Set the tag `X.Y-test` in tine docker setup in `docker-compose` file for the Broadcasthub
+* Start tine docker setup
+* Perform manual tests with test client `dev/client.js`
+
+    * Change the Broadcasthub port in `dev/client.js` to the one used by the tine docker setup
+    * Run the client from the project directory: `node dev/client.js`
+    * Create, change and delete a file in the local tine in the file manager
+    * The test client should print the messages from the Broadcasthub
+
+Integration tests do not work in the production image since development dependencies are not installed.
+
+E2E tests cannot be run against the Broadcasthub container in the tine docker setup since redis is not exposed and thus the redis publisher in the tests cannot publish messages which should be received by the clients in the tests.
