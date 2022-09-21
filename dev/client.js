@@ -4,7 +4,11 @@ const wslib = require('ws');
 var tine20AuthString = null;
 
 if (process.env.ENABLE_MULTITENANCY_MODE == 'false') {
-  tine20AuthString = 'longlongtoken';
+  const tine20Auth = {
+    token: 'longlongtoken',
+  };
+
+  tine20AuthString = JSON.stringify(tine20Auth);
 }
 
 if (process.env.ENABLE_MULTITENANCY_MODE == 'true') {
