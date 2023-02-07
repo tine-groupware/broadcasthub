@@ -23,4 +23,4 @@ docker login -u $MW_MW_REGISTRY_USER -p $MW_MW_REGISTRY_PASSWORD registry.metawa
 docker login -u $MW_DOCKER_HUB_USER -p $MW_DOCKER_HUB_PASSWORD docker.io
 
 # Build and push to registries
-docker buildx build --push --platform linux/amd64,linux/arm64/v8 -t dockerregistry.metaways.net/tine20/tine20-broadcasthub:$CI_COMMIT_TAG -t registry.metaways.net/tine/broadcasthub:$CI_COMMIT_TAG -t docker.io/tinegroupware/broadcasthub:$CI_COMMIT_TAG .
+docker buildx build --push --platform linux/amd64,linux/arm64/v8 -t dockerregistry.metaways.net/tine20/tine20-broadcasthub:$CI_COMMIT_TAG -t registry.metaways.net/tine/broadcasthub:$CI_COMMIT_TAG -t registry.metaways.net/tine/broadcasthub:latest -t docker.io/tinegroupware/broadcasthub:$CI_COMMIT_TAG .
